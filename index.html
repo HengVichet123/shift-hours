@@ -45,6 +45,17 @@
 
     .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .stat-big { font-size: 1.6rem; font-weight: 700; line-height: 1.2; }
+    .stat-big.hidden { color: #ccc; letter-spacing: 1px; }
+
+    /* the money on/off switch */
+    .switch {
+      width: 34px; height: 19px; border-radius: 999px; background: #ddd;
+      display: inline-flex; align-items: center; padding: 2px; flex-shrink: 0;
+      cursor: pointer; touch-action: manipulation; transition: background 0.15s;
+    }
+    .switch i { width: 15px; height: 15px; border-radius: 50%; background: white; display: block; transition: transform 0.15s; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+    .switch.on { background: #27ae60; }
+    .switch.on i { transform: translateX(15px); }
     .stat-sub { font-size: 0.72rem; color: #999; margin-top: 2px; }
     .ok { color: #27ae60; } .warn { color: #e67e22; } .over { color: #e74c3c; }
     .meter { height: 6px; background: #eee; border-radius: 3px; margin-top: 8px; overflow: hidden; }
@@ -233,7 +244,10 @@
       <div class="meter"><div class="meter-fill" id="window-meter"></div></div>
     </div>
     <div class="card">
-      <h3>This month</h3>
+      <h3 class="fold" style="cursor:default">
+        <span>This month</span>
+        <span class="switch" id="money-switch" onclick="toggleMoney()"><i></i></span>
+      </h3>
       <div class="stat-big" id="stat-pay">¥0</div>
       <div class="stat-sub" id="stat-hours">0.0h worked</div>
     </div>
@@ -539,6 +553,7 @@ const DEFAULT_SETTINGS = {
   periods: [],     // [{ id, name, from, to, limit }] — long holidays, when the cap rises
   autoBreak: true,
   showPay: true,   // the Pay breakdown card, folded or not — remembered between sessions
+  showMoney: true, // when off, every amount reads ¥-- --- (the hours stay visible)
   jobs: [{ id: 'j1', name: 'Job', color: JOB_COLORS[0], bands: DEFAULT_BANDS.map(b => ({ ...b })) }]
 };
 
@@ -691,6 +706,9 @@ function fromDateStr(s) { return new Date(s + 'T00:00:00'); }
 function addDays(s, n) { const d = fromDateStr(s); d.setDate(d.getDate() + n); return toDateStr(d); }
 function parseHM(s) { const [h, m] = s.split(':').map(Number); return h * 60 + m; }
 function yen(n) { return '¥' + Math.round(n).toLocaleString('en-US'); }
+// Every amount on screen goes through this, so one switch hides all of them at once —
+// a money switch that leaves the total showing three lines below would be no switch.
+function money(n) { return settings.showMoney === false ? '¥-- ---' : yen(n); }
 
 /* ---------- jobs ---------- */
 function jobById(id) { return settings.jobs.find(j => j.id === id) || settings.jobs[0]; }
@@ -888,6 +906,17 @@ function escapeHtml(s) {
 function changeMonth(dir) { monthOffset += dir; render(); }
 function sortKey(s) { return isTimed(s) ? s.start : '99:99'; }
 
+function toggleMoney() {
+  settings.showMoney = settings.showMoney === false;
+  settings.updatedAt = Date.now();
+  save(); render(); pushSoon();
+}
+function applyMoneySwitch() {
+  const on = settings.showMoney !== false;
+  document.getElementById('money-switch').classList.toggle('on', on);
+  document.getElementById('stat-pay').classList.toggle('hidden', !on);
+}
+
 function togglePay() {
   settings.showPay = !settings.showPay;
   settings.updatedAt = Date.now();
@@ -1032,7 +1061,8 @@ function render() {
     gross += p.pay; workedTotal += p.worked; breakTotal += p.brk;
   });
 
-  document.getElementById('stat-pay').textContent = yen(gross);
+  document.getElementById('stat-pay').textContent = money(gross);
+  applyMoneySwitch();
   document.getElementById('stat-hours').textContent = (workedTotal / 60).toFixed(1) + 'h worked';
 
   const payRows = document.getElementById('pay-rows');
@@ -1046,14 +1076,14 @@ function render() {
         html += `<div class="job-head">
           <span class="jn"><i class="jd" style="background:${g.job.color}"></i>${escapeHtml(g.job.name)}
             <span style="color:#bbb;font-weight:400">${(g.worked/60).toFixed(1)}h</span></span>
-          <span>${yen(g.pay)}</span></div>`;
+          <span>${money(g.pay)}</span></div>`;
       }
       Object.keys(g.buckets).map(Number).sort((a, b) => a - b).forEach(r => {
         const mins = g.buckets[r];
         html += `<div class="row${multiJob() ? ' sub' : ''}">
           <span class="rlabel">${r === reg ? 'Regular' : 'Night'}
             <span class="rhrs">${(mins/60).toFixed(1)}h × ¥${r}</span></span>
-          <span class="rval">${yen(r * mins / 60)}</span></div>`;
+          <span class="rval">${money(r * mins / 60)}</span></div>`;
       });
     });
     if (breakTotal > 0) {
@@ -1061,7 +1091,7 @@ function render() {
         <span class="rlabel">Unpaid break <span class="rhrs">${(breakTotal/60).toFixed(1)}h</span></span>
         <span class="rval">deducted</span></div>`;
     }
-    html += `<div class="row total"><span class="rlabel">Gross</span><span class="rval">${yen(gross)}</span></div>`;
+    html += `<div class="row total"><span class="rlabel">Gross</span><span class="rval">${money(gross)}</span></div>`;
     payRows.innerHTML = html;
   }
   applyPayFold();
@@ -1167,7 +1197,7 @@ function openDay(ds) {
       <div class="tl-head">
         <span class="t">${head} ${jobTag}
           <span style="color:#999;font-weight:400">${escapeHtml(s.label || '')}</span></span>
-        <span class="r">${yen(p.pay)}</span>
+        <span class="r">${money(p.pay)}</span>
       </div>
       ${axis}
       ${trackHtml(s)}
@@ -1196,7 +1226,7 @@ function openDay(ds) {
   }
 
   body.innerHTML = quickAddHtml(ds) + rows +
-    `<div class="row total"><span class="rlabel">${(total/60).toFixed(1)}h worked</span><span class="rval">${yen(pay)}</span></div>` +
+    `<div class="row total"><span class="rlabel">${(total/60).toFixed(1)}h worked</span><span class="rval">${money(pay)}</span></div>` +
     dupWarn +
     windowVerdict(ds, dm);
   document.getElementById('day-modal').classList.add('open');
@@ -2245,7 +2275,7 @@ document.getElementById('ics-second').addEventListener('change', e => {
 });
 
 /* ---------- keeping the installed app up to date ---------- */
-const APP_VERSION = 'v14';
+const APP_VERSION = 'v15';
 
 // Nuke the cached copy of the app and reload from the network. The shifts live in
 // localStorage, which none of this touches.
