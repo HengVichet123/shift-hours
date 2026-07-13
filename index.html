@@ -150,6 +150,13 @@
     .band-row .br { flex: 1; }
     .band-row .bx { background: #fee; color: #e74c3c; border: 1px solid #fcc; border-radius: 6px; width: 30px; height: 32px; flex-shrink: 0; cursor: pointer; font-size: 0.9rem; touch-action: manipulation; }
     .band-err { color: #e74c3c; font-size: 0.74rem; margin-top: 4px; }
+
+    /* Verdict on an import: would these shifts break the limit? */
+    .verdict { border-radius: 10px; padding: 9px 11px; font-size: 0.78rem; margin: 8px 0 2px; }
+    .verdict.ok { background: #eaf7ef; border: 1px solid #c6e9d5; color: #1e8449; }
+    .verdict.bad { background: #fdecea; border: 1px solid #f5c6c2; color: #a93226; }
+    .verdict b { font-weight: 700; }
+    .verdict.bad > b { display: block; margin-bottom: 4px; }
   </style>
 </head>
 <body>
@@ -196,9 +203,9 @@
     <div class="grid" id="month-grid"></div>
     <div class="legend">
       <span><i class="dot" style="background:#d5ddfc"></i>worked</span>
-      <span><i class="dot" style="background:#f6d5b0"></i>near limit</span>
+      <span><i class="dot" style="background:#f6d5b0"></i>close to 28h</span>
       <span><i class="dot" style="background:#f2c1bc"></i>over 28h</span>
-      <span style="margin-left:auto">small grey = hours you can still add</span>
+      <span style="margin-left:auto">tap a day to see its 7-day check</span>
     </div>
   </div>
 
@@ -269,6 +276,7 @@
     <input type="file" id="file-input" accept="image/*" style="display:none" onchange="handleUpload(event)">
     <div id="ocr-status"></div>
     <div class="extracted-list" id="ocr-results" style="display:none"></div>
+    <div id="ocr-verdict"></div>
     <div class="modal-actions">
       <button class="btn-outline" onclick="closeModal('upload-modal')">Close</button>
       <button class="btn-save" id="ocr-add-btn" style="display:none" onclick="addExtracted('ocr')">Add selected</button>
@@ -289,6 +297,7 @@
     </div>
     <div id="paste-status"></div>
     <div class="extracted-list" id="paste-results" style="display:none"></div>
+    <div id="paste-verdict"></div>
     <div class="modal-actions" id="paste-add-row" style="display:none">
       <button class="btn-save" onclick="addExtracted('paste')">Add selected</button>
     </div>
@@ -551,11 +560,12 @@ function payOf(s) {
 
 /* ---------- the 28-hour rolling rule ---------- */
 // Hours are attributed to the date the shift starts on, even if it ends after midnight.
-function dayMap() {
+function dayMapOf(list) {
   const m = {};
-  shifts.forEach(s => { m[s.date] = (m[s.date] || 0) + workedMin(s); });
+  list.forEach(s => { m[s.date] = (m[s.date] || 0) + workedMin(s); });
   return m;
 }
+function dayMap() { return dayMapOf(shifts); }
 // Total worked minutes in the 7 days beginning at `start`.
 function windowTotal(start, dm) {
   let t = 0;
@@ -581,8 +591,8 @@ function worstWindowOn(date, dm) {
 }
 // All violating windows across the whole dataset, merged so one long overrun
 // doesn't produce seven near-identical warnings.
-function violations() {
-  const dm = dayMap();
+function violationsOf(list) {
+  const dm = dayMapOf(list);
   const dates = Object.keys(dm).filter(d => dm[d] > 0).sort();
   if (!dates.length) return [];
   const limit = settings.limit * 60;
@@ -593,6 +603,7 @@ function violations() {
   }
   return bad;
 }
+function violations() { return violationsOf(shifts); }
 
 /* ---------- render ---------- */
 function monthView() {
@@ -631,7 +642,6 @@ function render() {
     const ds = toDateStr(new Date(year, month, day));
     const mins = dm[ds] || 0;
     const worst = worstWindowOn(ds, dm);
-    const cap = capacityOn(ds, dm);
 
     const c = document.createElement('div');
     let cls = 'cell';
@@ -642,9 +652,7 @@ function render() {
     c.className = cls;
 
     const hrs = mins > 0 ? `<div class="dhrs">${(mins/60).toFixed(1)}</div>` : '';
-    // How much more may still be worked on this day without breaking any window it sits in.
-    const capTxt = cap > 0 ? `<div class="cap">+${(cap/60).toFixed(1)}</div>` : '';
-    c.innerHTML = `<div class="dnum">${day}</div>${hrs}${capTxt}`;
+    c.innerHTML = `<div class="dnum">${day}</div>${hrs}`;
     c.onclick = () => openDay(ds);
     grid.appendChild(c);
   }
@@ -812,13 +820,10 @@ function openDay(ds) {
     d.toLocaleDateString('en', { weekday: 'long', month: 'short', day: 'numeric' });
   document.getElementById('day-add').onclick = () => { closeModal('day-modal'); openAddModal(ds); };
 
-  const cap = capacityOn(ds, dm);
-  const worst = worstWindowOn(ds, dm);
-  const limitMin = settings.limit * 60;
   const body = document.getElementById('day-body');
 
   if (!mine.length) {
-    body.innerHTML = `<div class="empty" style="padding:6px 0 12px">Nothing scheduled.</div>` + capacityNote(cap, worst, limitMin);
+    body.innerHTML = `<div class="empty" style="padding:6px 0 12px">Nothing scheduled.</div>` + windowVerdict(ds, dm);
     document.getElementById('day-modal').classList.add('open');
     return;
   }
@@ -848,7 +853,7 @@ function openDay(ds) {
 
   body.innerHTML = rows +
     `<div class="row total"><span class="rlabel">${(total / 60).toFixed(1)}h worked</span><span class="rval">${yen(pay)}</span></div>` +
-    capacityNote(cap, worst, limitMin);
+    windowVerdict(ds, dm);
   document.getElementById('day-modal').classList.add('open');
 }
 
@@ -874,17 +879,22 @@ function deleteFromDay(btn, id, ds) {
   openDay(ds);   // stay on the day so you can keep working on it
 }
 
-function capacityNote(cap, worst, limitMin) {
-  if (worst > limitMin) {
-    return `<div class="alert" style="margin-top:10px">This day sits inside a 7-day stretch of
-      <b>${(worst / 60).toFixed(1)}h</b> — already over the ${settings.limit}h limit.</div>`;
+// The verdict on a day: of the seven 7-day stretches this day sits in, the fullest one
+// decides whether the schedule is legal. Name it, so the number is never mysterious.
+function windowVerdict(ds, dm) {
+  const limitMin = settings.limit * 60;
+  const w = windowsContaining(ds, dm).reduce((a, b) => b.total > a.total ? b : a);
+  const hrs = (w.total / 60).toFixed(1);
+
+  if (w.total > limitMin) {
+    return `<div class="alert" style="margin-top:10px">
+      <b>⚠️ Over the limit</b>
+      The 7 days ${shortRange(w.start, w.end)} add up to <b>${hrs}h</b> —
+      ${((w.total - limitMin) / 60).toFixed(1)}h over ${settings.limit}h.</div>`;
   }
-  if (cap <= 0) {
-    return `<div class="alert" style="margin-top:10px">No hours left on this day — you are at the
-      ${settings.limit}h limit for a 7-day window containing it.</div>`;
-  }
-  return `<p class="hint" style="margin-top:10px">You can still work <b>${(cap / 60).toFixed(1)}h</b>
-    on this day without breaking the ${settings.limit}h rule.</p>`;
+  return `<p class="hint" style="margin-top:10px">
+    Fullest 7-day stretch containing this day: ${shortRange(w.start, w.end)} =
+    <b>${hrs}h</b> of ${settings.limit}h. Within the limit.</p>`;
 }
 
 function shortRange(a, b) {
@@ -1056,6 +1066,7 @@ function openPasteModal() {
   document.getElementById('paste-status').innerHTML = '';
   document.getElementById('paste-results').style.display = 'none';
   document.getElementById('paste-add-row').style.display = 'none';
+  document.getElementById('paste-verdict').innerHTML = '';
   document.getElementById('paste-modal').classList.add('open');
 }
 function doParsePaste() {
@@ -1068,6 +1079,7 @@ function openUploadModal() {
   document.getElementById('ocr-results').style.display = 'none';
   document.getElementById('ocr-add-btn').style.display = 'none';
   document.getElementById('file-input').value = '';
+  document.getElementById('ocr-verdict').innerHTML = '';
   document.getElementById('upload-modal').classList.add('open');
 }
 async function handleUpload(e) {
@@ -1107,13 +1119,38 @@ function renderExtracted(kind, found) {
     const dup = shifts.some(x => x.date === s.date && x.start === s.start && x.end === s.end);
     const hrs = (workedMin(s) / 60).toFixed(1);
     return `<div class="extracted-item">
-      <input type="checkbox" id="${kind}-chk-${i}" ${dup ? '' : 'checked'}>
+      <input type="checkbox" id="${kind}-chk-${i}" ${dup ? '' : 'checked'} onchange="previewCheck('${kind}')">
       <span>${s.date} ${s.start}–${s.end} <b>${hrs}h</b>
         <span style="color:#999">${escapeHtml(s.label)}</span>
         ${dup ? '<span class="tag">already added</span>' : ''}</span>
     </div>`;
   }).join('');
   addBtn.style.display = kind === 'ocr' ? 'block' : 'flex';
+  previewCheck(kind);
+}
+
+// The question that matters before committing: if I accept these, am I over 28h?
+// Answered against the shifts already saved plus the ones currently ticked.
+function previewCheck(kind) {
+  const found = pending[kind] || [];
+  const picked = found.filter((_, i) => document.getElementById(`${kind}-chk-${i}`)?.checked);
+  const bad = violationsOf(shifts.concat(picked));
+  const el = document.getElementById(kind === 'ocr' ? 'ocr-verdict' : 'paste-verdict');
+  const limitMin = settings.limit * 60;
+
+  if (!picked.length) { el.innerHTML = ''; return; }
+  if (!bad.length) {
+    const total = picked.reduce((n, s) => n + workedMin(s), 0);
+    el.innerHTML = `<div class="verdict ok">✓ Adding these ${picked.length} shift${picked.length>1?'s':''}
+      (${(total/60).toFixed(1)}h) keeps you within ${settings.limit}h in every 7-day stretch.</div>`;
+    return;
+  }
+  el.innerHTML = `<div class="verdict bad"><b>⚠️ These would put you over ${settings.limit}h</b>` +
+    bad.slice(0, 4).map(w =>
+      `<div>${shortRange(w.start, w.end)} — <b>${(w.total/60).toFixed(1)}h</b>
+        (+${((w.total - limitMin)/60).toFixed(1)}h)</div>`).join('') +
+    (bad.length > 4 ? `<div>…and ${bad.length - 4} more</div>` : '') +
+    `<div style="margin-top:5px;opacity:.85">Untick some shifts to see what fixes it.</div></div>`;
 }
 
 function addExtracted(kind) {
