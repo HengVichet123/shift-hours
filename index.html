@@ -18,12 +18,15 @@
 
     header {
       background: #1a1a2e; color: white;
-      padding: 8px 12px;
+      padding: 8px 12px 10px;
       padding-top: max(8px, env(safe-area-inset-top));
-      display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+      display: flex; flex-direction: column; gap: 8px; flex-shrink: 0;
       position: sticky; top: 0; z-index: 50;
     }
-    .month-nav { display: flex; align-items: center; gap: 4px; flex: 1; }
+    .hdr-top { display: flex; align-items: center; gap: 6px; }
+    .who { font-size: 0.9rem; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .who span { font-weight: 400; opacity: 0.55; font-size: 0.78rem; }
+    .month-nav { display: flex; align-items: center; gap: 4px; }
     .month-nav button { background: rgba(255,255,255,0.15); border: none; color: white; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.9rem; touch-action: manipulation; }
     .month-label { font-size: 0.85rem; font-weight: 600; flex: 1; text-align: center; }
     .hdr-actions { display: flex; gap: 4px; }
@@ -64,6 +67,37 @@
     .cell.risk { background: #fdf0e3; border-color: #f6d5b0; }
     .cell.bad  { background: #fdecea; border-color: #f2c1bc; }
     .cell .cap { font-size: 0.55rem; color: #aaa; line-height: 1; margin-top: 2px; }
+
+    /* Time axis — a shift drawn where it actually falls in the day */
+    .axis { display: flex; justify-content: space-between; font-size: 0.58rem; color: #bbb; margin-bottom: 3px; }
+    .track { position: relative; height: 22px; background: #f4f4f6; border-radius: 5px; overflow: hidden; }
+    .track .tick { position: absolute; top: 0; bottom: 0; width: 1px; background: #e8e8ec; }
+    .seg { position: absolute; top: 0; bottom: 0; }
+    .seg.reg { background: #4a6cf7; }
+    .seg.nig { background: #7d5fc4; }
+
+    .tl-row { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #f2f2f2; }
+    .tl-row:last-of-type { border-bottom: none; }
+    .tl-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.78rem; margin-bottom: 4px; }
+    .tl-head .t { font-weight: 600; }
+    .tl-head .r { color: #999; font-size: 0.72rem; }
+    .tl-foot { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+    .tl-foot .r { color: #999; font-size: 0.72rem; flex: 1; }
+    .mini { border: 1px solid #ddd; background: white; color: #444; padding: 4px 10px; border-radius: 6px; font-size: 0.72rem; cursor: pointer; touch-action: manipulation; }
+    .mini.del { border-color: #fcc; background: #fee; color: #e74c3c; }
+    .mini.del.confirming { background: #e74c3c; color: white; border-color: #c0392b; }
+
+    /* Upcoming days as bars */
+    .bar-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 0.75rem; }
+    .bar-row .bd { width: 54px; flex-shrink: 0; color: #666; }
+    .bar-row .bd.today { color: #1a1a2e; font-weight: 700; }
+    .bar-track { flex: 1; height: 14px; background: #f2f2f4; border-radius: 4px; position: relative; overflow: hidden; min-width: 0; }
+    .bar-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; display: flex; overflow: hidden; }
+    .bar-fill i { display: block; height: 100%; }
+    .bar-fill i.reg { background: #4a6cf7; }
+    .bar-fill i.nig { background: #7d5fc4; }
+    .bar-row .bh { width: 62px; flex-shrink: 0; text-align: right; font-variant-numeric: tabular-nums; color: #999; }
+    .bar-row .bh b { color: #222; }
 
     .legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 0.65rem; color: #999; margin-top: 8px; }
     .legend span { display: flex; align-items: center; gap: 3px; }
@@ -131,18 +165,21 @@
 <body>
 
 <header>
+  <div class="hdr-top">
+    <div class="who" id="who">Shift Hours</div>
+    <div class="hdr-actions">
+      <button class="hdr-btn" title="Add shift" onclick="openAddModal()">＋</button>
+      <button class="hdr-btn" title="Read shift photo" onclick="openUploadModal()">📷</button>
+      <button class="hdr-btn" title="Paste shift text" onclick="openPasteModal()">📝</button>
+      <button class="hdr-btn" title="Export to calendar with alarm" onclick="openIcsModal()">⏰</button>
+      <button class="hdr-btn" id="account-btn" title="Account" onclick="openAccount()" style="display:none">👤</button>
+      <button class="hdr-btn" title="Settings" onclick="openSettings()">⚙️</button>
+    </div>
+  </div>
   <div class="month-nav">
     <button onclick="changeMonth(-1)">&#8592;</button>
     <span class="month-label" id="month-label"></span>
     <button onclick="changeMonth(1)">&#8594;</button>
-  </div>
-  <div class="hdr-actions">
-    <button class="hdr-btn" title="Add shift" onclick="openAddModal()">＋</button>
-    <button class="hdr-btn" title="Read shift photo" onclick="openUploadModal()">📷</button>
-    <button class="hdr-btn" title="Paste shift text" onclick="openPasteModal()">📝</button>
-    <button class="hdr-btn" title="Export to calendar with alarm" onclick="openIcsModal()">⏰</button>
-    <button class="hdr-btn" id="account-btn" title="Account" onclick="openAccount()" style="display:none">👤</button>
-    <button class="hdr-btn" title="Settings" onclick="openSettings()">⚙️</button>
   </div>
 </header>
 
@@ -176,6 +213,16 @@
   </div>
 
   <div class="card">
+    <h3>Next 7 days</h3>
+    <div id="upcoming"></div>
+    <div class="legend">
+      <span><i class="dot" style="background:#4a6cf7"></i>regular</span>
+      <span><i class="dot" style="background:#7d5fc4"></i>night</span>
+      <span style="margin-left:auto" id="upcoming-sum"></span>
+    </div>
+  </div>
+
+  <div class="card">
     <h3>Pay breakdown</h3>
     <div id="pay-rows"></div>
   </div>
@@ -185,6 +232,19 @@
     <div id="shift-list"></div>
   </div>
 </main>
+
+<!-- Day detail -->
+<div class="modal-overlay" id="day-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2 id="day-title">Day</h2>
+    <div id="day-body"></div>
+    <div class="modal-actions">
+      <button class="btn-outline" onclick="closeModal('day-modal')">Close</button>
+      <button class="btn-save" id="day-add">Add shift</button>
+    </div>
+  </div>
+</div>
 
 <!-- Add/Edit Shift -->
 <div class="modal-overlay" id="add-modal">
@@ -345,6 +405,12 @@
   <div class="modal">
     <div class="modal-handle"></div>
     <h2>Settings</h2>
+
+    <div class="form-group">
+      <label>Your name</label>
+      <input type="text" id="set-name" placeholder="Vichet" maxlength="24">
+      <p class="hint">Just shown at the top of your own app. Stays on this device.</p>
+    </div>
 
     <div class="form-group">
       <label>Weekly limit (hours in any 7 consecutive days)</label>
@@ -565,6 +631,10 @@ function render() {
 
   document.getElementById('month-label').textContent =
     view.toLocaleDateString('en', { month: 'long', year: 'numeric' });
+  document.getElementById('who').innerHTML = settings.name
+    ? `${escapeHtml(settings.name)} <span>· shifts</span>`
+    : 'Shift Hours';
+  renderUpcoming();
 
   /* --- month grid --- */
   const first = new Date(year, month, 1);
@@ -596,7 +666,7 @@ function render() {
     // How much more may still be worked on this day without breaking any window it sits in.
     const capTxt = cap > 0 ? `<div class="cap">+${(cap/60).toFixed(1)}</div>` : '';
     c.innerHTML = `<div class="dnum">${day}</div>${hrs}${capTxt}`;
-    c.onclick = () => openAddModal(ds);
+    c.onclick = () => openDay(ds);
     grid.appendChild(c);
   }
 
@@ -717,6 +787,173 @@ function nightMinutesOf(s) {
   let n = 0;
   for (let m = a; m < b; m++) if (rateAt(m % DAY) > lowest) n++;
   return n;
+}
+
+/* ---------- drawing a shift on a time axis ---------- */
+// The axis runs 06:00 → 02:00 next day, which covers every realistic バイト shift.
+const AX_A = 6 * 60, AX_B = 26 * 60;
+const pctOf = m => Math.max(0, Math.min(100, (m - AX_A) / (AX_B - AX_A) * 100));
+
+// Consecutive minutes on the same rate, collapsed into blocks — this is what makes
+// "18:00–24:00 is 4h regular then 2h night" something you can see rather than infer.
+function segmentsOf(s) {
+  const { a, b } = span(s);
+  const lowest = Math.min(...settings.bands.map(x => +x.rate));
+  const segs = [];
+  let cur = null;
+  for (let m = a; m < b; m++) {
+    const r = (s.holiday && settings.holidayRate) ? +settings.holidayRate : rateAt(m % DAY);
+    if (!cur || cur.rate !== r) { cur = { from: m, to: m + 1, rate: r }; segs.push(cur); }
+    else cur.to = m + 1;
+  }
+  return segs.map(g => ({ ...g, night: g.rate > lowest }));
+}
+
+function trackHtml(s) {
+  const ticks = [10, 14, 18, 22].map(h =>
+    `<div class="tick" style="left:${pctOf(h * 60)}%"></div>`).join('');
+  const segs = segmentsOf(s).map(g => {
+    const l = pctOf(g.from), r = pctOf(g.to);
+    return `<div class="seg ${g.night ? 'nig' : 'reg'}" style="left:${l}%;width:${Math.max(r - l, 1)}%"></div>`;
+  }).join('');
+  return `<div class="track">${ticks}${segs}</div>`;
+}
+
+function openDay(ds) {
+  const d = fromDateStr(ds);
+  const dm = dayMap();
+  const mine = shifts.filter(s => s.date === ds)
+    .sort((a, b) => a.start.localeCompare(b.start));
+
+  document.getElementById('day-title').textContent =
+    d.toLocaleDateString('en', { weekday: 'long', month: 'short', day: 'numeric' });
+  document.getElementById('day-add').onclick = () => { closeModal('day-modal'); openAddModal(ds); };
+
+  const cap = capacityOn(ds, dm);
+  const worst = worstWindowOn(ds, dm);
+  const limitMin = settings.limit * 60;
+  const body = document.getElementById('day-body');
+
+  if (!mine.length) {
+    body.innerHTML = `<div class="empty" style="padding:6px 0 12px">Nothing scheduled.</div>` + capacityNote(cap, worst, limitMin);
+    document.getElementById('day-modal').classList.add('open');
+    return;
+  }
+
+  let total = 0, pay = 0;
+  const rows = mine.map(s => {
+    const p = payOf(s);
+    total += p.worked; pay += p.pay;
+    const night = segmentsOf(s).filter(g => g.night).reduce((n, g) => n + (g.to - g.from), 0);
+    const bits = [`${(p.worked / 60).toFixed(1)}h`];
+    if (night > 0) bits.push(`${(night / 60).toFixed(1)}h night`);
+    if (p.brk > 0) bits.push(`−${p.brk}m break`);
+    return `<div class="tl-row">
+      <div class="tl-head">
+        <span class="t">${s.start}–${s.end} <span style="color:#999;font-weight:400">${escapeHtml(s.label || '')}</span></span>
+        <span class="r">${yen(p.pay)}</span>
+      </div>
+      <div class="axis"><span>6:00</span><span>10:00</span><span>14:00</span><span>18:00</span><span>22:00</span><span>2:00</span></div>
+      ${trackHtml(s)}
+      <div class="tl-foot">
+        <span class="r">${bits.join(' · ')}</span>
+        <button class="mini" onclick="closeModal('day-modal');editShift('${s.id}')">Edit</button>
+        <button class="mini del" onclick="deleteFromDay(this,'${s.id}','${ds}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  body.innerHTML = rows +
+    `<div class="row total"><span class="rlabel">${(total / 60).toFixed(1)}h worked</span><span class="rval">${yen(pay)}</span></div>` +
+    capacityNote(cap, worst, limitMin);
+  document.getElementById('day-modal').classList.add('open');
+}
+
+// Same tap-again-to-confirm as the edit sheet, so a mis-tap on a phone never destroys a shift.
+let dayDelTimer = null;
+function deleteFromDay(btn, id, ds) {
+  if (!btn.classList.contains('confirming')) {
+    document.querySelectorAll('.mini.del.confirming').forEach(b => {
+      b.classList.remove('confirming'); b.textContent = 'Delete';
+    });
+    btn.classList.add('confirming');
+    btn.textContent = 'Tap again';
+    clearTimeout(dayDelTimer);
+    dayDelTimer = setTimeout(() => {
+      btn.classList.remove('confirming'); btn.textContent = 'Delete';
+    }, 3000);
+    return;
+  }
+  clearTimeout(dayDelTimer);
+  remember(id);
+  shifts = shifts.filter(x => x.id !== id);
+  save(); render(); pushSoon();
+  openDay(ds);   // stay on the day so you can keep working on it
+}
+
+function capacityNote(cap, worst, limitMin) {
+  if (worst > limitMin) {
+    return `<div class="alert" style="margin-top:10px">This day sits inside a 7-day stretch of
+      <b>${(worst / 60).toFixed(1)}h</b> — already over the ${settings.limit}h limit.</div>`;
+  }
+  if (cap <= 0) {
+    return `<div class="alert" style="margin-top:10px">No hours left on this day — you are at the
+      ${settings.limit}h limit for a 7-day window containing it.</div>`;
+  }
+  return `<p class="hint" style="margin-top:10px">You can still work <b>${(cap / 60).toFixed(1)}h</b>
+    on this day without breaking the ${settings.limit}h rule.</p>`;
+}
+
+/* ---------- the week ahead, as bars ---------- */
+function renderUpcoming() {
+  const dm = dayMap();
+  const today = toDateStr(new Date());
+  const box = document.getElementById('upcoming');
+  const days = Array.from({ length: 7 }, (_, i) => addDays(today, i));
+  const lowest = Math.min(...settings.bands.map(x => +x.rate));
+
+  const mins = days.map(ds => dm[ds] || 0);
+  const scale = Math.max(8 * 60, ...mins);   // keep bars comparable, floor at an 8h day
+
+  box.innerHTML = days.map((ds, i) => {
+    const d = fromDateStr(ds);
+    const total = mins[i];
+    const cap = capacityOn(ds, dm);
+
+    // Split the bar into regular vs night so the bar says *when*, not just how much.
+    let night = 0;
+    shifts.filter(s => s.date === ds).forEach(s => {
+      const segs = segmentsOf(s);
+      const gross = segs.reduce((n, g) => n + (g.to - g.from), 0);
+      const nightGross = segs.filter(g => g.night).reduce((n, g) => n + (g.to - g.from), 0);
+      night += gross > 0 ? workedMin(s) * (nightGross / gross) : 0;
+    });
+    const reg = Math.max(0, total - night);
+
+    const label = d.toLocaleDateString('en', { weekday: 'short', day: 'numeric' });
+    const fill = total > 0
+      ? `<div class="bar-fill" style="width:${total / scale * 100}%">
+           <i class="reg" style="width:${reg / total * 100}%"></i>
+           <i class="nig" style="width:${night / total * 100}%"></i>
+         </div>`
+      : '';
+    const right = total > 0
+      ? `<b>${(total / 60).toFixed(1)}h</b>`
+      : (cap > 0 ? `+${(cap / 60).toFixed(1)}h` : '0h');
+
+    return `<div class="bar-row" onclick="openDay('${ds}')" style="cursor:pointer">
+      <span class="bd${ds === today ? ' today' : ''}">${ds === today ? 'Today' : label}</span>
+      <span class="bar-track">${fill}</span>
+      <span class="bh">${right}</span>
+    </div>`;
+  }).join('');
+
+  // These same 7 days are themselves one of the rolling windows.
+  const win = mins.reduce((a, b) => a + b, 0);
+  const limitMin = settings.limit * 60;
+  const el = document.getElementById('upcoming-sum');
+  el.textContent = `${(win / 60).toFixed(1)}h of ${settings.limit}h`;
+  el.style.color = win > limitMin ? '#e74c3c' : win > limitMin * 0.9 ? '#e67e22' : '#999';
 }
 
 function shortRange(a, b) {
@@ -1124,6 +1361,7 @@ function fmtClock(min) {
 }
 
 function openSettings() {
+  document.getElementById('set-name').value = settings.name || '';
   document.getElementById('set-limit').value = settings.limit;
   document.getElementById('set-holiday').value = settings.holidayRate ?? '';
   document.getElementById('set-autobreak').checked = !!settings.autoBreak;
@@ -1139,6 +1377,7 @@ function saveSettings() {
   const limit = +document.getElementById('set-limit').value;
   if (!(limit > 0)) return alert('Weekly limit must be greater than 0.');
   const hol = document.getElementById('set-holiday').value.trim();
+  settings.name = document.getElementById('set-name').value.trim();
   settings.limit = limit;
   settings.bands = bands;
   settings.holidayRate = hol === '' ? null : +hol;
