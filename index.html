@@ -512,6 +512,15 @@
     <div id="snap-list"></div>
 
     <button class="btn-danger" style="width:100%;margin-top:12px" onclick="wipeAll()">Delete all shifts</button>
+
+    <p style="font-size:0.8rem;font-weight:600;margin:18px 0 6px">App</p>
+    <div class="row" style="border:none;padding:0 0 8px">
+      <span class="rlabel">Version</span>
+      <span class="rval" id="app-version">—</span>
+    </div>
+    <button class="btn-outline" style="width:100%" onclick="forceUpdate()">Force update</button>
+    <p class="hint">Throws away the cached copy of the app and reloads the newest one from the
+      internet. Your shifts are not touched.</p>
   </div>
 </div>
 
@@ -1979,6 +1988,7 @@ function openSettings() {
   renderPeriodsEditor();
   validatePeriods();
   renderSnapshots();
+  document.getElementById('app-version').textContent = APP_VERSION;
   document.getElementById('settings-modal').classList.add('open');
 }
 function saveSettings() {
@@ -2234,7 +2244,48 @@ document.getElementById('ics-second').addEventListener('change', e => {
   document.getElementById('ics-second-row').style.display = e.target.checked ? 'block' : 'none';
 });
 
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+/* ---------- keeping the installed app up to date ---------- */
+const APP_VERSION = 'v14';
+
+// Nuke the cached copy of the app and reload from the network. The shifts live in
+// localStorage, which none of this touches.
+async function forceUpdate() {
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+    if (window.caches) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+  } catch (e) { /* pressing on is better than stopping */ }
+  location.reload(true);
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    reg.update();                       // ask for a fresh worker on every launch
+    reg.addEventListener('updatefound', () => {
+      const sw = reg.installing;
+      if (!sw) return;
+      sw.addEventListener('statechange', () => {
+        // A new version is ready and an old one is in charge — hand over at once.
+        if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+          sw.postMessage('skip-waiting');
+        }
+      });
+    });
+  }).catch(() => {});
+
+  // The new worker took control: reload once so the page it serves is the new one.
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloaded) return;
+    reloaded = true;
+    location.reload();
+  });
+}
 
 load();
 render();
