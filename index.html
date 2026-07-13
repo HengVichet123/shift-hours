@@ -177,6 +177,25 @@
     .job-top .jc { width: 34px; height: 34px; border: 1px solid #ddd; border-radius: 8px; padding: 2px; flex-shrink: 0; }
     .job-top .jx { background: #fee; color: #e74c3c; border: 1px solid #fcc; border-radius: 6px; width: 34px; height: 34px; flex-shrink: 0; cursor: pointer; touch-action: manipulation; }
 
+    /* Quick add — tap a day, tap a number, done */
+    .quick { border: 1px solid #eee; border-radius: 10px; padding: 10px; margin-bottom: 14px; }
+    .quick .qtitle { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: #aaa; font-weight: 600; margin-bottom: 8px; }
+    .chips { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+    .chip {
+      border: 1px solid #ddd; background: white; color: #222;
+      border-radius: 8px; padding: 11px 0; font-size: 0.95rem; font-weight: 700;
+      cursor: pointer; touch-action: manipulation;
+    }
+    .chip:active { background: #1a1a2e; color: white; }
+    .chip.other { grid-column: span 2; font-weight: 400; font-size: 0.8rem; color: #666; }
+    .qrow { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+    .pill {
+      border: 1px solid #ddd; background: white; border-radius: 999px; padding: 5px 12px;
+      font-size: 0.75rem; cursor: pointer; touch-action: manipulation; color: #666;
+    }
+    .pill.on { background: #1a1a2e; border-color: #1a1a2e; color: white; font-weight: 600; }
+    .pill.job.on { color: white; }
+
     .verdict { border-radius: 10px; padding: 9px 11px; font-size: 0.78rem; margin: 8px 0 2px; }
     .verdict.ok { background: #eaf7ef; border: 1px solid #c6e9d5; color: #1e8449; }
     .verdict.bad { background: #fdecea; border: 1px solid #f5c6c2; color: #a93226; }
@@ -252,7 +271,7 @@
     <div id="day-body"></div>
     <div class="modal-actions">
       <button class="btn-outline" onclick="closeModal('day-modal')">Close</button>
-      <button class="btn-save" id="day-add">Add shift</button>
+      <button class="btn-save" id="day-add">Times…</button>
     </div>
   </div>
 </div>
@@ -519,7 +538,7 @@ const DEFAULT_SETTINGS = {
 // row-level security (see supabase-schema.sql).
 const CLOUD = { url: '', anonKey: '' };
 
-let shifts = [], settings = null, monthOffset = 0, editingId = null, addMode = 'times';
+let shifts = [], settings = null, monthOffset = 0, editingId = null, addMode = 'hours';
 let pending = { ocr: [], paste: [] };
 let tombs = [];
 let sb = null, user = null;
@@ -1112,7 +1131,7 @@ function openDay(ds) {
 
   const body = document.getElementById('day-body');
   if (!mine.length) {
-    body.innerHTML = `<div class="empty" style="padding:6px 0 12px">Nothing scheduled.</div>` + windowVerdict(ds, dm);
+    body.innerHTML = quickAddHtml(ds) + windowVerdict(ds, dm);
     document.getElementById('day-modal').classList.add('open');
     return;
   }
@@ -1167,7 +1186,7 @@ function openDay(ds) {
     }
   }
 
-  body.innerHTML = rows +
+  body.innerHTML = quickAddHtml(ds) + rows +
     `<div class="row total"><span class="rlabel">${(total/60).toFixed(1)}h worked</span><span class="rval">${yen(pay)}</span></div>` +
     dupWarn +
     windowVerdict(ds, dm);
@@ -1292,6 +1311,72 @@ function editShift(id) {
   document.getElementById('add-modal').classList.add('open');
 }
 
+// Why this shift cannot be recorded, or null. Not a warning: a repeat doubles both the pay
+// and the 28h count, and two shifts at the same time cannot both have happened.
+function blockedReason(data, exceptId) {
+  const { same, clash } = conflictsWith(data, exceptId);
+  if (same.length) {
+    return `Already there.\n\n${data.date} · ${describeShift(data)}\n\nOpen that day and edit the existing shift instead.`;
+  }
+  if (clash.length) {
+    const c = clash[0];
+    return `You cannot work two shifts at once.\n\n` +
+           `This runs at the same time as ${c.date} · ${describeShift(c)}.\n\n` +
+           `Fix the times, or open that day and change the shift that is already there.`;
+  }
+  // Hours-only entries carry no clock, so the only impossible thing left is a day adding
+  // up to more than a day.
+  const dayTotal = shifts.filter(x => x.date === data.date && x.id !== exceptId)
+                         .reduce((n, x) => n + workedMin(x), 0) + workedMin(data);
+  if (dayTotal > 24 * 60) {
+    return `That would make ${data.date} add up to ${(dayTotal/60).toFixed(1)} hours.\n\nThere are only 24 in a day.`;
+  }
+  return null;
+}
+
+/* --- quick add: tap a day, tap a number, done --- */
+let quickJob = null, quickNight = false;
+
+function quickAddHtml(ds) {
+  const jobPills = multiJob()
+    ? `<div class="qrow">` + settings.jobs.map(j =>
+        `<button class="pill job${j.id === (quickJob || lastJobId()) ? ' on' : ''}"
+           style="${j.id === (quickJob || lastJobId()) ? `background:${j.color};border-color:${j.color}` : ''}"
+           onclick="pickQuickJob('${j.id}','${ds}')">${escapeHtml(j.name)}</button>`).join('') + `</div>`
+    : '';
+  const nightPill = `<div class="qrow">
+    <button class="pill${quickNight ? ' on' : ''}" onclick="toggleQuickNight('${ds}')">🌙 night rate</button>
+  </div>`;
+  const hours = [1, 2, 3, 4, 5, 6, 7, 8];
+  return `<div class="quick">
+    <div class="qtitle">Add hours</div>
+    ${jobPills}${nightPill}
+    <div class="chips">
+      ${hours.map(h => `<button class="chip" onclick="quickAdd('${ds}',${h})">${h}</button>`).join('')}
+      <button class="chip other" onclick="closeModal('day-modal');openAddModal('${ds}')">…</button>
+    </div>
+  </div>`;
+}
+function pickQuickJob(id, ds) { quickJob = id; openDay(ds); }
+function toggleQuickNight(ds) { quickNight = !quickNight; openDay(ds); }
+
+// One tap = one shift. No form, no confirmation — just add it and get out of the way.
+function quickAdd(ds, hours) {
+  const jobId = quickJob || lastJobId();
+  const data = {
+    date: ds, jobId, label: '',
+    mins: Math.round(hours * 60), night: quickNight,
+    start: null, end: null, brk: null
+  };
+  const why = blockedReason(data, null);
+  if (why) return alert(why);
+
+  shifts.push(stamp({ ...data, id: newId() }));
+  save(); render(); pushSoon();
+  closeModal('day-modal');
+  warnIfOver(ds);
+}
+
 function saveShift() {
   const date = document.getElementById('input-date').value;
   if (!date) return alert('Pick a date.');
@@ -1322,26 +1407,8 @@ function saveShift() {
     };
   }
 
-  // These are not warnings. A repeat doubles the pay and the 28h count, and two shifts at
-  // the same time cannot both have happened — so the app refuses to record either.
-  const { same, clash } = conflictsWith(data, editingId);
-  if (same.length) {
-    return alert(`Already there.\n\n${data.date} · ${describeShift(data)}\n\nOpen that day and edit the existing shift instead.`);
-  }
-  if (clash.length) {
-    const c = clash[0];
-    return alert(
-      `You cannot work two shifts at once.\n\n` +
-      `This runs at the same time as ${c.date} · ${describeShift(c)}.\n\n` +
-      `Fix the times, or open that day and change the shift that is already there.`);
-  }
-  // Hours-only entries carry no clock, so the only impossible thing left is a day adding
-  // up to more than a day.
-  const dayTotal = shifts.filter(x => x.date === data.date && x.id !== editingId)
-                         .reduce((n, x) => n + workedMin(x), 0) + workedMin(data);
-  if (dayTotal > 24 * 60) {
-    return alert(`That would make ${data.date} add up to ${(dayTotal/60).toFixed(1)} hours.\n\nThere are only 24 in a day.`);
-  }
+  const why = blockedReason(data, editingId);
+  if (why) return alert(why);
 
   if (editingId) {
     const i = shifts.findIndex(x => x.id === editingId);
