@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Shift Hours">
+  <meta name="theme-color" content="#1a1a2e">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon.png">
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <title>Shift Hours</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #222; min-height: 100dvh; display: flex; flex-direction: column; }
+
+    header {
+      background: #1a1a2e; color: white;
+      padding: 8px 12px;
+      padding-top: max(8px, env(safe-area-inset-top));
+      display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+      position: sticky; top: 0; z-index: 50;
+    }
+    .month-nav { display: flex; align-items: center; gap: 4px; flex: 1; }
+    .month-nav button { background: rgba(255,255,255,0.15); border: none; color: white; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.9rem; touch-action: manipulation; }
+    .month-label { font-size: 0.85rem; font-weight: 600; flex: 1; text-align: center; }
+    .hdr-actions { display: flex; gap: 4px; }
+    .hdr-btn { background: rgba(255,255,255,0.15); border: none; color: white; width: 32px; height: 32px; border-radius: 6px; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; touch-action: manipulation; }
+    .hdr-btn:hover { background: rgba(255,255,255,0.28); }
+
+    main { padding: 10px; padding-bottom: calc(24px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 10px; max-width: 560px; width: 100%; margin: 0 auto; }
+
+    .card { background: white; border-radius: 12px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    .card h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: #888; font-weight: 600; margin-bottom: 8px; }
+
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .stat-big { font-size: 1.6rem; font-weight: 700; line-height: 1.2; }
+    .stat-sub { font-size: 0.72rem; color: #999; margin-top: 2px; }
+    .ok { color: #27ae60; } .warn { color: #e67e22; } .over { color: #e74c3c; }
+
+    .meter { height: 6px; background: #eee; border-radius: 3px; margin-top: 8px; overflow: hidden; }
+    .meter-fill { height: 100%; border-radius: 3px; transition: width 0.2s; }
+
+    .alert { background: #fdecea; border: 1px solid #f5c6c2; color: #a93226; border-radius: 10px; padding: 10px 12px; font-size: 0.8rem; }
+    .alert > b { display: block; margin-bottom: 4px; font-size: 0.82rem; }
+    .alert ul { margin: 0; padding-left: 16px; }
+    .alert li { margin-top: 2px; }
+
+    /* Month grid */
+    .grid-head, .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+    .grid-head div { text-align: center; font-size: 0.65rem; color: #999; font-weight: 600; padding-bottom: 4px; text-transform: uppercase; }
+    .cell {
+      aspect-ratio: 1 / 1; border-radius: 8px; background: #fafafa; border: 1px solid #f0f0f0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      cursor: pointer; touch-action: manipulation; position: relative; padding: 2px;
+    }
+    .cell.blank { background: transparent; border-color: transparent; cursor: default; }
+    .cell.today { border-color: #1a1a2e; border-width: 2px; }
+    .cell .dnum { font-size: 0.72rem; color: #666; line-height: 1.1; }
+    .cell .dhrs { font-size: 0.78rem; font-weight: 700; line-height: 1.2; margin-top: 1px; }
+    .cell.has { background: #eef1fe; border-color: #d5ddfc; }
+    .cell.risk { background: #fdf0e3; border-color: #f6d5b0; }
+    .cell.bad  { background: #fdecea; border-color: #f2c1bc; }
+    .cell .cap { font-size: 0.55rem; color: #aaa; line-height: 1; margin-top: 2px; }
+
+    .legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 0.65rem; color: #999; margin-top: 8px; }
+    .legend span { display: flex; align-items: center; gap: 3px; }
+    .dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+
+    /* Pay breakdown */
+    .row { display: flex; justify-content: space-between; align-items: baseline; padding: 5px 0; font-size: 0.84rem; border-bottom: 1px solid #f4f4f4; }
+    .row:last-child { border-bottom: none; }
+    .row .rlabel { color: #555; }
+    .row .rhrs { color: #aaa; font-size: 0.74rem; margin-left: 6px; }
+    .row .rval { font-variant-numeric: tabular-nums; font-weight: 600; }
+    .row.total { border-top: 2px solid #eee; border-bottom: none; margin-top: 4px; padding-top: 8px; font-size: 1rem; }
+    .row.total .rval { font-size: 1.15rem; color: #1a1a2e; }
+    .row.deduct .rval { color: #999; font-weight: 400; }
+
+    /* Shift list */
+    .shift-item { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #f4f4f4; cursor: pointer; font-size: 0.82rem; }
+    .shift-item:last-child { border-bottom: none; }
+    .shift-item .sdate { font-weight: 600; width: 52px; flex-shrink: 0; }
+    .shift-item .stime { color: #555; width: 96px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+    .shift-item .slabel { color: #999; flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; }
+    .shift-item .ltxt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .shift-item .spay { font-weight: 600; font-variant-numeric: tabular-nums; }
+    .tag { font-size: 0.6rem; padding: 1px 5px; border-radius: 4px; background: #eee; color: #777; flex-shrink: 0; }
+    .tag.night { background: #ede7f6; color: #6a4bab; }
+    .tag.holi { background: #fdecea; color: #c0392b; }
+    .empty { color: #bbb; font-size: 0.82rem; text-align: center; padding: 12px 0; }
+
+    /* Modal */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: flex-end; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: white; border-radius: 16px 16px 0 0; padding: 20px 20px calc(20px + env(safe-area-inset-bottom)); width: 100%; max-width: 560px; box-shadow: 0 -4px 24px rgba(0,0,0,0.15); max-height: 88dvh; overflow-y: auto; }
+    .modal-handle { width: 36px; height: 4px; background: #ddd; border-radius: 2px; margin: 0 auto 16px; }
+    .modal h2 { margin-bottom: 14px; font-size: 1rem; }
+    .form-group { margin-bottom: 10px; }
+    label { display: block; font-size: 0.8rem; color: #555; margin-bottom: 3px; }
+    input, select, textarea { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem; font-family: inherit; }
+    textarea { font-family: monospace; font-size: 0.78rem; }
+    .form-row { display: flex; gap: 8px; }
+    .form-row .form-group { flex: 1; }
+    .hint { font-size: 0.72rem; color: #999; margin-top: 4px; }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+    .btn-outline { background: white; border: 1px solid #ddd; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; touch-action: manipulation; }
+    .btn-save { background: #1a1a2e; color: white; padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; font-size: 0.85rem; touch-action: manipulation; }
+    .btn-danger { background: #fee; color: #e74c3c; border: 1px solid #fcc; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; touch-action: manipulation; }
+    .btn-danger.confirming { background: #e74c3c; color: white; border-color: #c0392b; }
+    .chk { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem; color: #333; }
+    .chk input { width: auto; margin: 0; }
+
+    .upload-area { border: 2px dashed #ccc; border-radius: 10px; padding: 16px; text-align: center; cursor: pointer; margin-bottom: 10px; }
+    .upload-area p { color: #888; font-size: 0.8rem; margin-top: 6px; }
+    .extracted-list { max-height: 200px; overflow-y: auto; margin: 8px 0; }
+    .extracted-item { display: flex; align-items: center; gap: 8px; padding: 5px 8px; background: #f8f8f8; border-radius: 6px; margin-bottom: 4px; font-size: 0.76rem; }
+    .extracted-item input[type=checkbox] { flex-shrink: 0; width: 16px; height: 16px; }
+
+    /* Rate bands editor */
+    .band-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+    .band-row input { padding: 6px 8px; font-size: 0.82rem; }
+    .band-row .bt { width: 78px; flex-shrink: 0; }
+    .band-row .br { flex: 1; }
+    .band-row .bx { background: #fee; color: #e74c3c; border: 1px solid #fcc; border-radius: 6px; width: 30px; height: 32px; flex-shrink: 0; cursor: pointer; font-size: 0.9rem; touch-action: manipulation; }
+    .band-err { color: #e74c3c; font-size: 0.74rem; margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="month-nav">
+    <button onclick="changeMonth(-1)">&#8592;</button>
+    <span class="month-label" id="month-label"></span>
+    <button onclick="changeMonth(1)">&#8594;</button>
+  </div>
+  <div class="hdr-actions">
+    <button class="hdr-btn" title="Add shift" onclick="openAddModal()">＋</button>
+    <button class="hdr-btn" title="Read shift photo" onclick="openUploadModal()">📷</button>
+    <button class="hdr-btn" title="Paste shift text" onclick="openPasteModal()">📝</button>
+    <button class="hdr-btn" title="Export to calendar with alarm" onclick="openIcsModal()">⏰</button>
+    <button class="hdr-btn" title="Settings" onclick="openSettings()">⚙️</button>
+  </div>
+</header>
+
+<main>
+  <div class="stats">
+    <div class="card">
+      <h3>Worst 7-day window</h3>
+      <div class="stat-big" id="stat-window">0.0h</div>
+      <div class="stat-sub" id="stat-window-sub">limit 28h</div>
+      <div class="meter"><div class="meter-fill" id="window-meter"></div></div>
+    </div>
+    <div class="card">
+      <h3>This month</h3>
+      <div class="stat-big" id="stat-pay">¥0</div>
+      <div class="stat-sub" id="stat-hours">0.0h worked</div>
+    </div>
+  </div>
+
+  <div class="alert" id="alert-box" style="display:none"></div>
+
+  <div class="card">
+    <h3>Hours by day</h3>
+    <div class="grid-head"><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div></div>
+    <div class="grid" id="month-grid"></div>
+    <div class="legend">
+      <span><i class="dot" style="background:#d5ddfc"></i>worked</span>
+      <span><i class="dot" style="background:#f6d5b0"></i>near limit</span>
+      <span><i class="dot" style="background:#f2c1bc"></i>over 28h</span>
+      <span style="margin-left:auto">small grey = hours you can still add</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Pay breakdown</h3>
+    <div id="pay-rows"></div>
+  </div>
+
+  <div class="card">
+    <h3>Shifts <span id="shift-count" style="color:#ccc;font-weight:400"></span></h3>
+    <div id="shift-list"></div>
+  </div>
+</main>
+
+<!-- Add/Edit Shift -->
+<div class="modal-overlay" id="add-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2 id="modal-title">Add Shift</h2>
+    <div class="form-group"><label>Date</label><input type="date" id="input-date"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Start</label><input type="time" id="input-start"></div>
+      <div class="form-group"><label>End</label><input type="time" id="input-end"></div>
+    </div>
+    <p class="hint" id="cross-hint" style="display:none">Ends past midnight — counted as the same working day.</p>
+    <div class="form-group"><label>Place / label</label><input type="text" id="input-label" placeholder="豊橋野依インター"></div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Break (min)</label>
+        <input type="number" id="input-break" min="0" step="5" placeholder="auto">
+        <p class="hint" id="break-hint"></p>
+      </div>
+      <div class="form-group">
+        <label>&nbsp;</label>
+        <label class="chk" style="padding-top:8px"><input type="checkbox" id="input-holiday"> Holiday rate</label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-danger" id="delete-btn" style="display:none" onclick="deleteCurrentShift()">Delete</button>
+      <button class="btn-outline" onclick="closeModal('add-modal')">Cancel</button>
+      <button class="btn-save" onclick="saveShift()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Photo OCR -->
+<div class="modal-overlay" id="upload-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>Read Shift Photo</h2>
+    <div class="upload-area" onclick="document.getElementById('file-input').click()">
+      <div style="font-size:1.5rem">📷</div>
+      <p>Tap to select a screenshot</p>
+    </div>
+    <input type="file" id="file-input" accept="image/*" style="display:none" onchange="handleUpload(event)">
+    <div id="ocr-status"></div>
+    <div class="extracted-list" id="ocr-results" style="display:none"></div>
+    <div class="modal-actions">
+      <button class="btn-outline" onclick="closeModal('upload-modal')">Close</button>
+      <button class="btn-save" id="ocr-add-btn" style="display:none" onclick="addExtracted('ocr')">Add selected</button>
+    </div>
+  </div>
+</div>
+
+<!-- Paste text -->
+<div class="modal-overlay" id="paste-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>Paste Shift Text</h2>
+    <textarea id="paste-text" style="height:110px" placeholder="▢2026/07/23 (木) 13:00〜18:00 豊橋野依インター ▢2026/07/24 (金) 11:00〜15:30 豊橋野依インター"></textarea>
+    <p class="hint">Paste the message from work. Entries can be on one line or many. Understands 2026/07/23 or 7/23, 〜 ~ or -, and end times past midnight.</p>
+    <div class="modal-actions" style="margin-bottom:6px">
+      <button class="btn-outline" onclick="closeModal('paste-modal')">Cancel</button>
+      <button class="btn-save" onclick="doParsePaste()">Read</button>
+    </div>
+    <div id="paste-status"></div>
+    <div class="extracted-list" id="paste-results" style="display:none"></div>
+    <div class="modal-actions" id="paste-add-row" style="display:none">
+      <button class="btn-save" onclick="addExtracted('paste')">Add selected</button>
+    </div>
+  </div>
+</div>
+
+<!-- Calendar export -->
+<div class="modal-overlay" id="ics-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>Shift Alarms</h2>
+    <p class="hint" style="margin-bottom:12px">
+      A web app can't set a real alarm on iOS — notifications can't be scheduled for a future time from a browser.
+      Instead this hands your shifts to the iPhone Calendar, which <i>can</i>. Import once and iOS alerts you before every shift.
+    </p>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Alert before shift (min)</label>
+        <input type="number" id="ics-lead" min="0" step="5" value="20">
+      </div>
+      <div class="form-group">
+        <label>Include</label>
+        <select id="ics-scope">
+          <option value="future">Upcoming shifts only</option>
+          <option value="month">This month</option>
+          <option value="all">Everything</option>
+        </select>
+      </div>
+    </div>
+    <label class="chk" style="margin-bottom:4px"><input type="checkbox" id="ics-second"> Add a second, earlier alert</label>
+    <div class="form-group" id="ics-second-row" style="display:none;margin-top:6px">
+      <input type="number" id="ics-lead2" min="0" step="15" value="120" placeholder="minutes">
+      <p class="hint">e.g. 120 = a heads-up two hours ahead, plus the one right before.</p>
+    </div>
+    <p class="hint" id="ics-count" style="margin-top:8px"></p>
+    <div class="modal-actions">
+      <button class="btn-outline" onclick="closeModal('ics-modal')">Cancel</button>
+      <button class="btn-save" onclick="downloadIcs()">Download .ics</button>
+    </div>
+    <p class="hint" style="margin-top:10px">
+      Tap Download → iOS opens it → <b>Add All</b>. Re-export whenever you add shifts; re-importing the same shift updates it
+      instead of duplicating it.
+    </p>
+  </div>
+</div>
+
+<!-- Settings -->
+<div class="modal-overlay" id="settings-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>Settings</h2>
+
+    <div class="form-group">
+      <label>Weekly limit (hours in any 7 consecutive days)</label>
+      <input type="number" id="set-limit" min="1" step="0.5">
+      <p class="hint">Student visa 資格外活動許可 is 28h. This is checked as a rolling window, not Mon–Sun.</p>
+    </div>
+
+    <div class="form-group">
+      <label>Hourly rate bands</label>
+      <div id="band-editor"></div>
+      <button class="btn-outline" style="width:100%;margin-top:4px" onclick="addBandRow()">+ Add band</button>
+      <div class="band-err" id="band-err"></div>
+      <p class="hint">Bands must cover 00:00–24:00 with no gaps or overlaps. Hours are priced by the band they actually fall in, so an 18:00–24:00 shift is part regular, part night.</p>
+    </div>
+
+    <div class="form-group">
+      <label>Holiday rate (¥/h, optional)</label>
+      <input type="number" id="set-holiday" min="0" step="10" placeholder="off — leave blank">
+      <p class="hint">If set, a shift ticked "Holiday rate" is paid entirely at this rate, ignoring the bands.</p>
+    </div>
+
+    <div class="form-group">
+      <label class="chk"><input type="checkbox" id="set-autobreak"> Auto-deduct unpaid breaks</label>
+      <p class="hint">45 min once a shift passes 6h, 60 min once it passes 8h (労基法34条). Deducted from both pay and the 28h count, spread across the bands the shift spans. Override per shift.</p>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-outline" onclick="closeModal('settings-modal')">Cancel</button>
+      <button class="btn-save" onclick="saveSettings()">Save</button>
+    </div>
+
+    <p style="font-size:0.8rem;font-weight:600;margin:18px 0 8px">Data</p>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="btn-outline" style="flex:1" onclick="exportData()">Copy all data</button>
+      <button class="btn-outline" style="flex:1" onclick="showImportBox()">Paste &amp; import</button>
+    </div>
+    <div id="import-box" style="display:none;margin-bottom:10px">
+      <textarea id="import-json" style="height:70px" placeholder="Paste exported data here..."></textarea>
+      <button class="btn-save" style="width:100%;margin-top:6px" onclick="importData()">Import</button>
+    </div>
+    <button class="btn-danger" style="width:100%" onclick="wipeAll()">Delete all shifts</button>
+  </div>
+</div>
+
+<script>
+/* ---------- constants & state ---------- */
+const DAY = 1440;
+const DEFAULT_SETTINGS = {
+  limit: 28,
+  bands: [
+    { start: '00:00', end: '06:00', rate: 1420 },
+    { start: '06:00', end: '22:00', rate: 1140 },
+    { start: '22:00', end: '24:00', rate: 1420 }
+  ],
+  holidayRate: null,
+  autoBreak: true
+};
+let shifts = [], settings = { ...DEFAULT_SETTINGS }, monthOffset = 0, editingId = null;
+let pending = { ocr: [], paste: [] };
+
+/* ---------- storage ---------- */
+function load() {
+  try { shifts = JSON.parse(localStorage.getItem('sh_shifts') || '[]'); } catch { shifts = []; }
+  try {
+    const s = JSON.parse(localStorage.getItem('sh_settings') || 'null');
+    settings = s ? { ...DEFAULT_SETTINGS, ...s } : { ...DEFAULT_SETTINGS };
+  } catch { settings = { ...DEFAULT_SETTINGS }; }
+}
+function save() {
+  localStorage.setItem('sh_shifts', JSON.stringify(shifts));
+  localStorage.setItem('sh_settings', JSON.stringify(settings));
+}
+
+/* ---------- date helpers ---------- */
+function toDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function fromDateStr(s) { return new Date(s + 'T00:00:00'); }
+function addDays(s, n) { const d = fromDateStr(s); d.setDate(d.getDate() + n); return toDateStr(d); }
+function parseHM(s) { const [h, m] = s.split(':').map(Number); return h * 60 + m; }
+function fmtH(min) { return (min / 60).toFixed(1) + 'h'; }
+function yen(n) { return '¥' + Math.round(n).toLocaleString('en-US'); }
+
+/* ---------- shift math ---------- */
+// End at or before start means the shift runs past midnight ("21:00–00:00" = 3h).
+function span(s) {
+  const a = parseHM(s.start);
+  let b = parseHM(s.end);
+  if (b <= a) b += DAY;
+  return { a, b, dur: b - a };
+}
+function autoBreakFor(dur) {
+  if (dur > 8 * 60) return 60;
+  if (dur > 6 * 60) return 45;
+  return 0;
+}
+function breakOf(s) {
+  if (s.brk != null && s.brk !== '') return Math.max(0, +s.brk);
+  return settings.autoBreak ? autoBreakFor(span(s).dur) : 0;
+}
+function workedMin(s) { return Math.max(0, span(s).dur - breakOf(s)); }
+
+function rateAt(minuteOfDay) {
+  for (const b of settings.bands) {
+    const bs = parseHM(b.start);
+    const be = b.end === '24:00' ? DAY : parseHM(b.end);
+    if (minuteOfDay >= bs && minuteOfDay < be) return +b.rate;
+  }
+  return 0;
+}
+
+// Minutes bucketed by hourly rate, with the unpaid break removed proportionally
+// across whichever bands the shift actually spans.
+function payOf(s) {
+  const { a, b, dur } = span(s);
+  const worked = workedMin(s);
+  const factor = dur > 0 ? worked / dur : 0;
+  const buckets = {};
+
+  if (s.holiday && settings.holidayRate) {
+    buckets[settings.holidayRate] = worked;
+    return { buckets, pay: settings.holidayRate * worked / 60, worked, brk: breakOf(s) };
+  }
+  for (let m = a; m < b; m++) {
+    const r = rateAt(m % DAY);
+    buckets[r] = (buckets[r] || 0) + 1;
+  }
+  let pay = 0;
+  for (const r in buckets) {
+    buckets[r] *= factor;
+    pay += (+r) * buckets[r] / 60;
+  }
+  return { buckets, pay, worked, brk: breakOf(s) };
+}
+
+/* ---------- the 28-hour rolling rule ---------- */
+// Hours are attributed to the date the shift starts on, even if it ends after midnight.
+function dayMap() {
+  const m = {};
+  shifts.forEach(s => { m[s.date] = (m[s.date] || 0) + workedMin(s); });
+  return m;
+}
+// Total worked minutes in the 7 days beginning at `start`.
+function windowTotal(start, dm) {
+  let t = 0;
+  for (let i = 0; i < 7; i++) t += dm[addDays(start, i)] || 0;
+  return t;
+}
+// Every 7-day window that contains `date` — there are 7 of them.
+function windowsContaining(date, dm) {
+  const out = [];
+  for (let i = 6; i >= 0; i--) {
+    const start = addDays(date, -i);
+    out.push({ start, end: addDays(start, 6), total: windowTotal(start, dm) });
+  }
+  return out;
+}
+// The tightest window over this day decides how much more may be worked on it.
+function capacityOn(date, dm) {
+  const limit = settings.limit * 60;
+  return Math.max(0, Math.min(...windowsContaining(date, dm).map(w => limit - w.total)));
+}
+function worstWindowOn(date, dm) {
+  return Math.max(...windowsContaining(date, dm).map(w => w.total));
+}
+// All violating windows across the whole dataset, merged so one long overrun
+// doesn't produce seven near-identical warnings.
+function violations() {
+  const dm = dayMap();
+  const dates = Object.keys(dm).filter(d => dm[d] > 0).sort();
+  if (!dates.length) return [];
+  const limit = settings.limit * 60;
+  const bad = [];
+  for (let start = addDays(dates[0], -6); start <= dates[dates.length - 1]; start = addDays(start, 1)) {
+    const total = windowTotal(start, dm);
+    if (total > limit) bad.push({ start, end: addDays(start, 6), total });
+  }
+  return bad;
+}
+
+/* ---------- render ---------- */
+function monthView() {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + monthOffset);
+  return d;
+}
+
+function render() {
+  const dm = dayMap();
+  const view = monthView();
+  const year = view.getFullYear(), month = view.getMonth();
+  const today = toDateStr(new Date());
+  const limitMin = settings.limit * 60;
+
+  document.getElementById('month-label').textContent =
+    view.toLocaleDateString('en', { month: 'long', year: 'numeric' });
+
+  /* --- month grid --- */
+  const first = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const lead = (first.getDay() + 6) % 7; // Monday-first
+  const grid = document.getElementById('month-grid');
+  grid.innerHTML = '';
+
+  for (let i = 0; i < lead; i++) {
+    const c = document.createElement('div');
+    c.className = 'cell blank';
+    grid.appendChild(c);
+  }
+  for (let day = 1; day <= daysInMonth; day++) {
+    const ds = toDateStr(new Date(year, month, day));
+    const mins = dm[ds] || 0;
+    const worst = worstWindowOn(ds, dm);
+    const cap = capacityOn(ds, dm);
+
+    const c = document.createElement('div');
+    let cls = 'cell';
+    if (ds === today) cls += ' today';
+    if (worst > limitMin) cls += ' bad';
+    else if (mins > 0 && worst > limitMin * 0.9) cls += ' risk';
+    else if (mins > 0) cls += ' has';
+    c.className = cls;
+
+    const hrs = mins > 0 ? `<div class="dhrs">${(mins/60).toFixed(1)}</div>` : '';
+    // How much more may still be worked on this day without breaking any window it sits in.
+    const capTxt = cap > 0 ? `<div class="cap">+${(cap/60).toFixed(1)}</div>` : '';
+    c.innerHTML = `<div class="dnum">${day}</div>${hrs}${capTxt}`;
+    c.onclick = () => openAddModal(ds);
+    grid.appendChild(c);
+  }
+
+  /* --- worst window across the visible month --- */
+  let worstTotal = 0, worstStart = null;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const ds = toDateStr(new Date(year, month, day));
+    windowsContaining(ds, dm).forEach(w => {
+      if (w.total > worstTotal) { worstTotal = w.total; worstStart = w; }
+    });
+  }
+  const wEl = document.getElementById('stat-window');
+  const wSub = document.getElementById('stat-window-sub');
+  const wMeter = document.getElementById('window-meter');
+  wEl.textContent = (worstTotal / 60).toFixed(1) + 'h';
+  const pct = Math.min(100, worstTotal / limitMin * 100);
+  let color = '#27ae60';
+  if (worstTotal > limitMin) color = '#e74c3c';
+  else if (pct > 90) color = '#e67e22';
+  wEl.className = 'stat-big ' + (worstTotal > limitMin ? 'over' : pct > 90 ? 'warn' : 'ok');
+  wMeter.style.width = pct + '%';
+  wMeter.style.background = color;
+  wSub.textContent = worstStart && worstTotal > 0
+    ? `of ${settings.limit}h · ${shortRange(worstStart.start, worstStart.end)}`
+    : `limit ${settings.limit}h`;
+
+  /* --- violations --- */
+  const bad = violations();
+  const alertBox = document.getElementById('alert-box');
+  if (bad.length) {
+    alertBox.style.display = 'block';
+    alertBox.innerHTML = `<b>⚠️ Over the ${settings.limit}h limit in ${bad.length} rolling window${bad.length>1?'s':''}</b><ul>` +
+      bad.slice(0, 6).map(w =>
+        `<li>${shortRange(w.start, w.end)} — <b>${(w.total/60).toFixed(1)}h</b> (+${((w.total-limitMin)/60).toFixed(1)}h)</li>`
+      ).join('') +
+      (bad.length > 6 ? `<li>…and ${bad.length - 6} more</li>` : '') + '</ul>';
+  } else {
+    alertBox.style.display = 'none';
+  }
+
+  /* --- month pay --- */
+  const monthShifts = shifts
+    .filter(s => { const d = fromDateStr(s.date); return d.getFullYear() === year && d.getMonth() === month; })
+    .sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
+
+  const totals = {};   // rate -> minutes
+  let gross = 0, workedTotal = 0, breakTotal = 0;
+  monthShifts.forEach(s => {
+    const p = payOf(s);
+    for (const r in p.buckets) totals[r] = (totals[r] || 0) + p.buckets[r];
+    gross += p.pay;
+    workedTotal += p.worked;
+    breakTotal += p.brk;
+  });
+
+  document.getElementById('stat-pay').textContent = yen(gross);
+  document.getElementById('stat-hours').textContent = (workedTotal / 60).toFixed(1) + 'h worked';
+
+  const payRows = document.getElementById('pay-rows');
+  const rates = Object.keys(totals).map(Number).sort((a, b) => a - b);
+  if (!rates.length) {
+    payRows.innerHTML = '<div class="empty">No shifts this month.</div>';
+  } else {
+    payRows.innerHTML = rates.map(r => {
+      const mins = totals[r];
+      return `<div class="row">
+        <span class="rlabel">${rateLabel(r)} <span class="rhrs">${(mins/60).toFixed(1)}h × ¥${r}</span></span>
+        <span class="rval">${yen(r * mins / 60)}</span>
+      </div>`;
+    }).join('') +
+    (breakTotal > 0 ? `<div class="row deduct">
+        <span class="rlabel">Unpaid break <span class="rhrs">${(breakTotal/60).toFixed(1)}h</span></span>
+        <span class="rval">deducted</span>
+      </div>` : '') +
+    `<div class="row total"><span class="rlabel">Gross</span><span class="rval">${yen(gross)}</span></div>`;
+  }
+
+  /* --- shift list --- */
+  const list = document.getElementById('shift-list');
+  document.getElementById('shift-count').textContent = monthShifts.length ? `· ${monthShifts.length}` : '';
+  if (!monthShifts.length) {
+    list.innerHTML = '<div class="empty">Nothing yet. Tap ＋, 📷 or 📝 to add.</div>';
+  } else {
+    list.innerHTML = monthShifts.map(s => {
+      const p = payOf(s);
+      const d = fromDateStr(s.date);
+      const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+      const crosses = parseHM(s.end) <= parseHM(s.start);
+      const nightMin = nightMinutesOf(s);
+      return `<div class="shift-item" onclick="editShift('${s.id}')">
+        <span class="sdate">${d.getDate()} ${dow}</span>
+        <span class="stime">${s.start}–${s.end}${crosses ? '⁺' : ''} <span style="color:#bbb">${(p.worked/60).toFixed(1)}h</span></span>
+        <span class="slabel"><span class="ltxt">${escapeHtml(s.label || '')}</span>${nightMin > 0 ? '<span class="tag night">night</span>' : ''}${s.holiday ? '<span class="tag holi">holiday</span>' : ''}</span>
+        <span class="spay">${yen(p.pay)}</span>
+      </div>`;
+    }).join('');
+  }
+}
+
+function rateLabel(r) {
+  const band = settings.bands.find(b => +b.rate === r);
+  if (settings.holidayRate && r === +settings.holidayRate) return 'Holiday';
+  const all = settings.bands.filter(b => +b.rate === r);
+  if (!all.length) return `¥${r}`;
+  const isNight = all.every(b => {
+    const s = parseHM(b.start), e = b.end === '24:00' ? DAY : parseHM(b.end);
+    return s >= 22 * 60 || e <= 5 * 60 || (s >= 0 && e <= 6 * 60);
+  });
+  const lowest = Math.min(...settings.bands.map(b => +b.rate));
+  if (r === lowest) return 'Regular';
+  return isNight ? 'Night' : `¥${r} band`;
+}
+
+// Minutes of this shift falling in a band that is not the cheapest one.
+function nightMinutesOf(s) {
+  const { a, b } = span(s);
+  const lowest = Math.min(...settings.bands.map(x => +x.rate));
+  let n = 0;
+  for (let m = a; m < b; m++) if (rateAt(m % DAY) > lowest) n++;
+  return n;
+}
+
+function shortRange(a, b) {
+  const f = d => fromDateStr(d).toLocaleDateString('en', { month: 'short', day: 'numeric' });
+  return `${f(a)} – ${f(b)}`;
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+function changeMonth(dir) { monthOffset += dir; render(); }
+
+/* ---------- add / edit ---------- */
+function updateBreakHint() {
+  const st = document.getElementById('input-start').value;
+  const en = document.getElementById('input-end').value;
+  const hint = document.getElementById('break-hint');
+  const cross = document.getElementById('cross-hint');
+  if (!st || !en) { hint.textContent = ''; cross.style.display = 'none'; return; }
+  const { dur } = span({ start: st, end: en });
+  cross.style.display = parseHM(en) <= parseHM(st) ? 'block' : 'none';
+  const auto = settings.autoBreak ? autoBreakFor(dur) : 0;
+  hint.textContent = `${(dur/60).toFixed(1)}h shift → auto ${auto} min`;
+}
+
+function openAddModal(dateStr) {
+  editingId = null;
+  document.getElementById('modal-title').textContent = 'Add Shift';
+  document.getElementById('delete-btn').style.display = 'none';
+  document.getElementById('input-date').value = dateStr || toDateStr(new Date());
+  document.getElementById('input-start').value = '';
+  document.getElementById('input-end').value = '';
+  document.getElementById('input-label').value = lastLabel();
+  document.getElementById('input-break').value = '';
+  document.getElementById('input-holiday').checked = false;
+  updateBreakHint();
+  document.getElementById('add-modal').classList.add('open');
+}
+function lastLabel() {
+  const s = [...shifts].sort((a, b) => b.date.localeCompare(a.date))[0];
+  return s ? (s.label || '') : '';
+}
+function editShift(id) {
+  const s = shifts.find(x => x.id === id); if (!s) return;
+  editingId = id;
+  document.getElementById('modal-title').textContent = 'Edit Shift';
+  document.getElementById('delete-btn').style.display = 'block';
+  document.getElementById('input-date').value = s.date;
+  document.getElementById('input-start').value = s.start;
+  document.getElementById('input-end').value = s.end;
+  document.getElementById('input-label').value = s.label || '';
+  document.getElementById('input-break').value = (s.brk != null && s.brk !== '') ? s.brk : '';
+  document.getElementById('input-holiday').checked = !!s.holiday;
+  updateBreakHint();
+  document.getElementById('add-modal').classList.add('open');
+}
+
+function saveShift() {
+  const brkRaw = document.getElementById('input-break').value.trim();
+  const data = {
+    date: document.getElementById('input-date').value,
+    start: document.getElementById('input-start').value,
+    end: document.getElementById('input-end').value,
+    label: document.getElementById('input-label').value.trim(),
+    brk: brkRaw === '' ? null : Math.max(0, +brkRaw),
+    holiday: document.getElementById('input-holiday').checked
+  };
+  if (!data.date || !data.start || !data.end) return alert('Fill in date, start and end.');
+  if (data.start === data.end) return alert('Start and end are the same.');
+
+  if (editingId) {
+    const i = shifts.findIndex(x => x.id === editingId);
+    if (i >= 0) shifts[i] = { ...shifts[i], ...data };
+  } else {
+    shifts.push({ ...data, id: Date.now().toString() + Math.random().toString(36).slice(2, 7) });
+  }
+  save(); closeModal('add-modal'); render();
+  warnIfOver(data.date);
+}
+
+// Tell him straight away if the shift he just saved broke the rule.
+function warnIfOver(date) {
+  const dm = dayMap();
+  const limitMin = settings.limit * 60;
+  const worst = windowsContaining(date, dm).filter(w => w.total > limitMin);
+  if (worst.length) {
+    const w = worst.reduce((a, b) => b.total > a.total ? b : a);
+    alert(`⚠️ This puts you at ${(w.total/60).toFixed(1)}h in the 7 days ${shortRange(w.start, w.end)} — over the ${settings.limit}h limit.`);
+  }
+}
+
+let deleteTimer = null;
+function deleteCurrentShift() {
+  const btn = document.getElementById('delete-btn');
+  if (!btn.classList.contains('confirming')) {
+    btn.classList.add('confirming');
+    btn.textContent = 'Tap again to delete';
+    clearTimeout(deleteTimer);
+    deleteTimer = setTimeout(() => { btn.classList.remove('confirming'); btn.textContent = 'Delete'; }, 3000);
+    return;
+  }
+  clearTimeout(deleteTimer);
+  shifts = shifts.filter(x => x.id !== editingId);
+  save(); closeModal('add-modal'); render();
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  const btn = document.getElementById('delete-btn');
+  if (btn) { btn.classList.remove('confirming'); btn.textContent = 'Delete'; clearTimeout(deleteTimer); }
+}
+
+/* ---------- parsing shift text ---------- */
+// Handles "▢2026/07/23 (木) 13:00〜18:00 豊橋野依インター", several per line or one
+// per line, with or without the year, and 〜 ~ ～ - – — as the separator.
+function parseShiftText(text) {
+  // Scan for every date+time run rather than splitting on a separator — the bullet
+  // varies (▢ □ ☐ ・ …) and OCR invents its own. Whatever sits between one match and
+  // the next is that shift's label.
+  const re = /(?:(\d{4})\s*[\/\-.年]\s*)?(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})\s*日?\s*(?:[（(][^）)]*[）)])?\s*(\d{1,2})\s*[:：]\s*(\d{2})\s*[〜~～\-–—ー]\s*(\d{1,2})\s*[:：]\s*(\d{2})/g;
+  const thisYear = new Date().getFullYear();
+  const pad = n => String(n).padStart(2, '0');
+  const matches = [...text.matchAll(re)];
+  const out = [];
+
+  matches.forEach((m, i) => {
+    const [, y, mo, d, sh, sm, eh, em] = m;
+    const H = +sh, EH = +eh;
+    if (+mo < 1 || +mo > 12 || +d < 1 || +d > 31) return;
+    if (H > 23 || EH > 24 || +sm > 59 || +em > 59) return;
+
+    const from = m.index + m[0].length;
+    const to = i + 1 < matches.length ? matches[i + 1].index : text.length;
+    const label = text.slice(from, to)
+      .split(/[\n\r]/)[0]                       // the label never runs onto the next line
+      .replace(/^[\s　:：\-–—]+/, '')            // leading punctuation left over from the time
+      .replace(/[\s　□■▢▫▪◻◼☐☑☒・･,、]+$/, '')  // the next entry's bullet, trailing junk
+      .trim();
+
+    out.push({
+      date: `${y ? +y : thisYear}-${pad(+mo)}-${pad(+d)}`,
+      start: `${pad(H)}:${sm}`,
+      end: `${pad(EH % 24)}:${em}`,
+      label,
+      holiday: false,
+      brk: null
+    });
+  });
+  return out;
+}
+
+function openPasteModal() {
+  document.getElementById('paste-text').value = '';
+  document.getElementById('paste-status').innerHTML = '';
+  document.getElementById('paste-results').style.display = 'none';
+  document.getElementById('paste-add-row').style.display = 'none';
+  document.getElementById('paste-modal').classList.add('open');
+}
+function doParsePaste() {
+  const text = document.getElementById('paste-text').value;
+  renderExtracted('paste', parseShiftText(text));
+}
+
+function openUploadModal() {
+  document.getElementById('ocr-status').innerHTML = '';
+  document.getElementById('ocr-results').style.display = 'none';
+  document.getElementById('ocr-add-btn').style.display = 'none';
+  document.getElementById('file-input').value = '';
+  document.getElementById('upload-modal').classList.add('open');
+}
+async function handleUpload(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const status = document.getElementById('ocr-status');
+  status.innerHTML = '<p class="hint">Reading… ⏳</p>';
+  try {
+    const { data: { text } } = await Tesseract.recognize(file, 'jpn+eng', {
+      logger: m => {
+        if (m.status === 'recognizing text')
+          status.innerHTML = `<p class="hint">Reading… ${Math.round(m.progress * 100)}%</p>`;
+      }
+    });
+    renderExtracted('ocr', parseShiftText(text));
+  } catch {
+    status.innerHTML = '<p class="hint" style="color:#e74c3c">Could not read that image.</p>';
+  }
+}
+
+function renderExtracted(kind, found) {
+  const status = document.getElementById(kind === 'ocr' ? 'ocr-status' : 'paste-status');
+  const box = document.getElementById(kind === 'ocr' ? 'ocr-results' : 'paste-results');
+  const addBtn = kind === 'ocr'
+    ? document.getElementById('ocr-add-btn')
+    : document.getElementById('paste-add-row');
+
+  if (!found.length) {
+    status.innerHTML = '<p class="hint" style="color:#e74c3c">No shifts found. Expected something like 2026/07/23 13:00〜18:00.</p>';
+    box.style.display = 'none';
+    addBtn.style.display = 'none';
+    return;
+  }
+  pending[kind] = found;
+  status.innerHTML = `<p class="hint">Found ${found.length} shift${found.length>1?'s':''}:</p>`;
+  box.style.display = 'block';
+  box.innerHTML = found.map((s, i) => {
+    const dup = shifts.some(x => x.date === s.date && x.start === s.start && x.end === s.end);
+    const hrs = (workedMin(s) / 60).toFixed(1);
+    return `<div class="extracted-item">
+      <input type="checkbox" id="${kind}-chk-${i}" ${dup ? '' : 'checked'}>
+      <span>${s.date} ${s.start}–${s.end} <b>${hrs}h</b>
+        <span style="color:#999">${escapeHtml(s.label)}</span>
+        ${dup ? '<span class="tag">already added</span>' : ''}</span>
+    </div>`;
+  }).join('');
+  addBtn.style.display = kind === 'ocr' ? 'block' : 'flex';
+}
+
+function addExtracted(kind) {
+  const found = pending[kind] || [];
+  let added = 0;
+  found.forEach((s, i) => {
+    const chk = document.getElementById(`${kind}-chk-${i}`);
+    if (!chk || !chk.checked) return;
+    shifts.push({ ...s, id: Date.now().toString() + Math.random().toString(36).slice(2, 7) });
+    added++;
+  });
+  save(); render();
+  closeModal(kind === 'ocr' ? 'upload-modal' : 'paste-modal');
+  if (added) {
+    const bad = violations();
+    alert(`Added ${added} shift${added>1?'s':''}.` +
+      (bad.length ? `\n\n⚠️ You are now over the ${settings.limit}h limit in ${bad.length} rolling window${bad.length>1?'s':''}.` : ''));
+  }
+}
+
+/* ---------- calendar export ---------- */
+// iOS cannot schedule a notification from a web app, so the alarm is handed to the
+// system calendar as a VALARM instead. Times are written as floating local time,
+// which is what you want as long as the phone is in the same timezone you work in.
+function icsStamp(dateStr, hm, extraDays) {
+  const d = fromDateStr(dateStr);
+  d.setDate(d.getDate() + (extraDays || 0));
+  const [h, m] = hm.split(':').map(Number);
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}T${p(h)}${p(m)}00`;
+}
+function icsEscape(s) {
+  return String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+}
+// RFC 5545 caps a line at 75 octets; fold on byte length so Japanese labels survive.
+function icsFold(line) {
+  const enc = new TextEncoder();
+  if (enc.encode(line).length <= 73) return line;
+  const out = [];
+  let cur = '', curLen = 0;
+  for (const ch of line) {
+    const n = enc.encode(ch).length;
+    if (curLen + n > 72) { out.push(cur); cur = ' '; curLen = 1; }
+    cur += ch; curLen += n;
+  }
+  if (cur.trim()) out.push(cur);
+  return out.join('\r\n');
+}
+
+function icsScopeShifts() {
+  const scope = document.getElementById('ics-scope').value;
+  const today = toDateStr(new Date());
+  const view = monthView();
+  let list = [...shifts];
+  if (scope === 'future') list = list.filter(s => s.date >= today);
+  else if (scope === 'month') list = list.filter(s => {
+    const d = fromDateStr(s.date);
+    return d.getFullYear() === view.getFullYear() && d.getMonth() === view.getMonth();
+  });
+  return list.sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
+}
+function updateIcsCount() {
+  const n = icsScopeShifts().length;
+  document.getElementById('ics-count').textContent =
+    n ? `${n} shift${n>1?'s':''} will be exported.` : 'No shifts in that range.';
+}
+
+function buildIcs(list, leads) {
+  // Bump the sequence on every export so re-importing overwrites rather than duplicates.
+  const seq = (+(localStorage.getItem('sh_icsseq') || 0)) + 1;
+  localStorage.setItem('sh_icsseq', seq);
+
+  const now = new Date();
+  const p = n => String(n).padStart(2, '0');
+  const stamp = `${now.getUTCFullYear()}${p(now.getUTCMonth()+1)}${p(now.getUTCDate())}T${p(now.getUTCHours())}${p(now.getUTCMinutes())}${p(now.getUTCSeconds())}Z`;
+
+  const lines = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//shift-hours//EN',
+    'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:Shifts'
+  ];
+  list.forEach(s => {
+    const crosses = parseHM(s.end) <= parseHM(s.start);
+    const title = s.label ? `バイト — ${s.label}` : 'バイト';
+    const p2 = payOf(s);
+    lines.push(
+      'BEGIN:VEVENT',
+      `UID:${s.id}@shift-hours`,
+      `DTSTAMP:${stamp}`,
+      `SEQUENCE:${seq}`,
+      `DTSTART:${icsStamp(s.date, s.start, 0)}`,
+      `DTEND:${icsStamp(s.date, s.end, crosses ? 1 : 0)}`,
+      icsFold(`SUMMARY:${icsEscape(title)}`),
+      icsFold(`DESCRIPTION:${icsEscape(`${(p2.worked/60).toFixed(1)}h · ${yen(p2.pay)}`)}`)
+    );
+    leads.forEach(lead => lines.push(
+      'BEGIN:VALARM',
+      'ACTION:DISPLAY',
+      `TRIGGER:-PT${lead}M`,
+      icsFold(`DESCRIPTION:${icsEscape(`Shift in ${lead} min${s.label ? ' — ' + s.label : ''}`)}`),
+      'END:VALARM'
+    ));
+    lines.push('END:VEVENT');
+  });
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+}
+
+function downloadIcs() {
+  const list = icsScopeShifts();
+  if (!list.length) return alert('No shifts in that range.');
+
+  const lead1 = Math.max(0, +document.getElementById('ics-lead').value || 0);
+  const leads = [lead1];
+  if (document.getElementById('ics-second').checked) {
+    const lead2 = Math.max(0, +document.getElementById('ics-lead2').value || 0);
+    if (lead2 && lead2 !== lead1) leads.push(lead2);
+  }
+
+  const blob = new Blob([buildIcs(list, leads)], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'shifts.ics';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  closeModal('ics-modal');
+}
+
+function openIcsModal() {
+  document.getElementById('ics-second-row').style.display =
+    document.getElementById('ics-second').checked ? 'block' : 'none';
+  updateIcsCount();
+  document.getElementById('ics-modal').classList.add('open');
+}
+
+/* ---------- settings ---------- */
+function bandRowHtml(b, i) {
+  return `<div class="band-row" data-i="${i}">
+    <input class="bt" type="time" value="${b.start}">
+    <input class="bt" type="time" value="${b.end === '24:00' ? '00:00' : b.end}" data-end="1">
+    <input class="br" type="number" min="0" step="10" value="${b.rate}" placeholder="¥/h">
+    <button class="bx" onclick="this.parentElement.remove();validateBands()">×</button>
+  </div>`;
+}
+function renderBandEditor() {
+  document.getElementById('band-editor').innerHTML =
+    settings.bands.map((b, i) => bandRowHtml(b, i)).join('');
+  document.getElementById('band-editor').addEventListener('input', validateBands);
+}
+function addBandRow() {
+  document.getElementById('band-editor').insertAdjacentHTML(
+    'beforeend', bandRowHtml({ start: '00:00', end: '00:00', rate: 1140 }, settings.bands.length));
+  validateBands();
+}
+function readBands() {
+  return [...document.querySelectorAll('#band-editor .band-row')].map(row => {
+    const [s, e] = row.querySelectorAll('.bt');
+    const r = row.querySelector('.br');
+    // A midnight end means the end of the day, not the start of it.
+    return { start: s.value, end: e.value === '00:00' ? '24:00' : e.value, rate: +r.value };
+  }).filter(b => b.start && b.end);
+}
+// Bands must tile 00:00–24:00 exactly, or some hours would be paid ¥0.
+function validateBands() {
+  const bands = readBands();
+  const err = document.getElementById('band-err');
+  if (!bands.length) { err.textContent = 'Add at least one band.'; return null; }
+  const iv = bands.map(b => ({
+    s: parseHM(b.start),
+    e: b.end === '24:00' ? DAY : parseHM(b.end),
+    rate: b.rate
+  })).sort((a, b) => a.s - b.s);
+
+  for (const b of iv) {
+    if (b.e <= b.s) { err.textContent = 'Each band must end after it starts.'; return null; }
+    if (!(b.rate >= 0)) { err.textContent = 'Every band needs a rate.'; return null; }
+  }
+  if (iv[0].s !== 0) { err.textContent = 'Bands must start at 00:00.'; return null; }
+  if (iv[iv.length - 1].e !== DAY) { err.textContent = 'Bands must run to 24:00.'; return null; }
+  for (let i = 1; i < iv.length; i++) {
+    if (iv[i].s < iv[i-1].e) { err.textContent = 'Bands overlap.'; return null; }
+    if (iv[i].s > iv[i-1].e) { err.textContent = `Gap at ${fmtClock(iv[i-1].e)}.`; return null; }
+  }
+  err.textContent = '';
+  return bands;
+}
+function fmtClock(min) {
+  return `${String(Math.floor(min/60)).padStart(2,'0')}:${String(min%60).padStart(2,'0')}`;
+}
+
+function openSettings() {
+  document.getElementById('set-limit').value = settings.limit;
+  document.getElementById('set-holiday').value = settings.holidayRate ?? '';
+  document.getElementById('set-autobreak').checked = !!settings.autoBreak;
+  document.getElementById('import-box').style.display = 'none';
+  document.getElementById('import-json').value = '';
+  renderBandEditor();
+  validateBands();
+  document.getElementById('settings-modal').classList.add('open');
+}
+function saveSettings() {
+  const bands = validateBands();
+  if (!bands) return alert('Fix the rate bands first — see the message under them.');
+  const limit = +document.getElementById('set-limit').value;
+  if (!(limit > 0)) return alert('Weekly limit must be greater than 0.');
+  const hol = document.getElementById('set-holiday').value.trim();
+  settings.limit = limit;
+  settings.bands = bands;
+  settings.holidayRate = hol === '' ? null : +hol;
+  settings.autoBreak = document.getElementById('set-autobreak').checked;
+  save(); closeModal('settings-modal'); render();
+}
+
+/* ---------- data transfer ---------- */
+function exportData() {
+  const payload = JSON.stringify({
+    sh_shifts: localStorage.getItem('sh_shifts') || '[]',
+    sh_settings: localStorage.getItem('sh_settings') || '{}'
+  });
+  navigator.clipboard.writeText(payload)
+    .then(() => alert('Copied. Open the other version and tap ⚙️ → Paste & import.'))
+    .catch(() => {
+      document.getElementById('import-json').value = payload;
+      document.getElementById('import-box').style.display = 'block';
+      alert('Could not copy automatically — the data is in the box below, select and copy it.');
+    });
+}
+function showImportBox() {
+  const b = document.getElementById('import-box');
+  b.style.display = b.style.display === 'none' ? 'block' : 'none';
+}
+function importData() {
+  try {
+    const p = JSON.parse(document.getElementById('import-json').value.trim());
+    if (p.sh_shifts) localStorage.setItem('sh_shifts', p.sh_shifts);
+    if (p.sh_settings) localStorage.setItem('sh_settings', p.sh_settings);
+    load(); render();
+    closeModal('settings-modal');
+    alert('Imported.');
+  } catch { alert('That does not look like exported data.'); }
+}
+function wipeAll() {
+  if (!confirm('Delete every shift? Settings are kept.')) return;
+  shifts = [];
+  save(); render(); closeModal('settings-modal');
+}
+
+/* ---------- boot ---------- */
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) closeModal(el.id); });
+});
+['input-start', 'input-end'].forEach(id =>
+  document.getElementById(id).addEventListener('change', updateBreakHint));
+
+document.getElementById('ics-scope').addEventListener('change', updateIcsCount);
+document.getElementById('ics-second').addEventListener('change', e => {
+  document.getElementById('ics-second-row').style.display = e.target.checked ? 'block' : 'none';
+});
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+
+load();
+render();
+</script>
+</body>
+</html>
