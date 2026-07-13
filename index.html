@@ -61,6 +61,17 @@
     .switch.on i { transform: translateX(15px); }
     .stat-sub { font-size: 0.72rem; color: #999; margin-top: 2px; }
     .stat-sub.hidden { color: #d5d5d5; }
+
+    /* Switch the month figure between earned-already and what the month will come to.
+       NOT .seg — that name is already the absolutely-positioned shift segment on the day
+       timeline, and reusing it stretched this to full height. */
+    .mtog { display: flex; margin-top: 8px; border: 1px solid #eee; border-radius: 7px; overflow: hidden; }
+    .mtog button {
+      flex: 1; border: none; background: white; color: #999; padding: 5px 2px;
+      font-size: 0.66rem; line-height: 1.2; white-space: nowrap;
+      cursor: pointer; touch-action: manipulation;
+    }
+    .mtog button.on { background: #1a1a2e; color: white; font-weight: 700; }
     .ok { color: #27ae60; } .warn { color: #e67e22; } .over { color: #e74c3c; }
     .meter { height: 6px; background: #eee; border-radius: 3px; margin-top: 8px; overflow: hidden; }
     .meter-fill { height: 100%; border-radius: 3px; transition: width 0.2s; }
@@ -270,6 +281,10 @@
       </h3>
       <div class="stat-big" id="stat-pay">¥0</div>
       <div class="stat-sub" id="stat-hours">0.0h worked</div>
+      <div class="mtog" id="month-seg" style="display:none">
+        <button id="seg-sofar" onclick="setMonthMode('sofar')">so far</button>
+        <button id="seg-end" onclick="setMonthMode('end')">by end</button>
+      </div>
     </div>
   </div>
 
@@ -574,7 +589,8 @@ const DEFAULT_SETTINGS = {
   periods: [],     // [{ id, name, from, to, limit }] — long holidays, when the cap rises
   autoBreak: true,
   showPay: true,   // the Pay breakdown card, folded or not — remembered between sessions
-  showMoney: true, // when off, every amount reads ¥-- --- (the hours stay visible)
+  showMoney: true, // when off, the This month card reads ¥-- ---
+  monthMode: 'sofar',  // 'sofar' = earned already · 'end' = what the month will come to
   jobs: [{ id: 'j1', name: 'Job', color: JOB_COLORS[0], bands: DEFAULT_BANDS.map(b => ({ ...b })) }]
 };
 
@@ -939,6 +955,12 @@ function applyMoneySwitch() {
   document.getElementById('stat-hours').classList.toggle('hidden', !on);
 }
 
+function setMonthMode(m) {
+  settings.monthMode = m;
+  settings.updatedAt = Date.now();
+  save(); render(); pushSoon();
+}
+
 function togglePay() {
   settings.showPay = !settings.showPay;
   settings.updatedAt = Date.now();
@@ -1083,7 +1105,10 @@ function render() {
     return d.getFullYear() === year && d.getMonth() === month;
   });
 
-  let gross = 0, workedTotal = 0, breakTotal = 0;
+  // The card used to add up the whole month — including shifts not yet worked — and call
+  // the result "worked". It was a forecast wearing the clothes of a fact. Split them.
+  let gross = 0, workedTotal = 0, breakTotal = 0;   // everything in the viewed month
+  let earned = 0, doneMins = 0;                     // only what has actually happened
   const byJob = new Map();
   monthShifts.forEach(s => {
     const p = payOf(s);
@@ -1092,13 +1117,32 @@ function render() {
     for (const r in p.buckets) g.buckets[r] = (g.buckets[r] || 0) + p.buckets[r];
     g.pay += p.pay; g.worked += p.worked;
     gross += p.pay; workedTotal += p.worked; breakTotal += p.brk;
+    if (s.date <= today) { earned += p.pay; doneMins += p.worked; }
   });
 
-  // The switch hides the whole card's figures — the hours are as private as the money.
+  const viewingCurrent = (year === new Date().getFullYear() && month === new Date().getMonth());
+  const isPast = new Date(year, month + 1, 0) < new Date(today + 'T00:00:00');
+  const hasUpcoming = workedTotal > doneMins;
+
+  // "so far" only means something in a month that is still running and has shifts ahead.
+  const canSwitch = viewingCurrent && hasUpcoming;
+  const mode = canSwitch ? (settings.monthMode === 'end' ? 'end' : 'sofar') : 'all';
+
+  const seg = document.getElementById('month-seg');
+  seg.style.display = canSwitch ? 'flex' : 'none';
+  document.getElementById('seg-sofar').classList.toggle('on', mode === 'sofar');
+  document.getElementById('seg-end').classList.toggle('on', mode === 'end');
+
   const showMoney = settings.showMoney !== false;
-  document.getElementById('stat-pay').textContent = money(gross);
+  const bigVal  = mode === 'sofar' ? earned : gross;
+  const bigMins = mode === 'sofar' ? doneMins : workedTotal;
+  const word = mode === 'sofar' ? 'worked so far'
+             : mode === 'end'   ? 'by month end'
+             : (isPast ? 'worked' : 'scheduled');
+
+  document.getElementById('stat-pay').textContent = money(bigVal);
   document.getElementById('stat-hours').textContent =
-    showMoney ? (workedTotal / 60).toFixed(1) + 'h worked' : '--.-h worked';
+    `${showMoney ? (bigMins / 60).toFixed(1) : '--.-'}h ${word}`;
   applyMoneySwitch();
 
   const payRows = document.getElementById('pay-rows');
@@ -2311,7 +2355,7 @@ document.getElementById('ics-second').addEventListener('change', e => {
 });
 
 /* ---------- keeping the installed app up to date ---------- */
-const APP_VERSION = 'v22';
+const APP_VERSION = 'v23';
 
 // Nuke the cached copy of the app and reload from the network. The shifts live in
 // localStorage, which none of this touches.
