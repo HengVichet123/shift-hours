@@ -943,7 +943,7 @@ function render() {
   document.getElementById('month-label').textContent =
     view.toLocaleDateString('en', { month: 'long', year: 'numeric' });
   document.getElementById('who').innerHTML = settings.name
-    ? `Swift <span>· ${escapeHtml(settings.name)}</span>`
+    ? `Swift: <span>${escapeHtml(settings.name)}</span>`
     : 'Swift';
 
   /* --- month grid --- */
@@ -2284,7 +2284,7 @@ document.getElementById('ics-second').addEventListener('change', e => {
 });
 
 /* ---------- keeping the installed app up to date ---------- */
-const APP_VERSION = 'v18';
+const APP_VERSION = 'v19';
 
 // Nuke the cached copy of the app and reload from the network. The shifts live in
 // localStorage, which none of this touches.
