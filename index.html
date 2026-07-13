@@ -1262,26 +1262,25 @@ function saveShift() {
     };
   }
 
-  // A duplicate is never intended, and it quietly inflates both the pay and the 28h count.
+  // These are not warnings. A repeat doubles the pay and the 28h count, and two shifts at
+  // the same time cannot both have happened — so the app refuses to record either.
   const { same, clash } = conflictsWith(data, editingId);
   if (same.length) {
-    return alert(`That shift is already there — ${data.date}, ${describeShift(data)}.\n\nTap it in the day view to edit it instead.`);
+    return alert(`Already there.\n\n${data.date} · ${describeShift(data)}\n\nOpen that day and edit the existing shift instead.`);
   }
-  // Overlapping shifts cannot both have happened. Warn, but let it through: a mistyped
-  // end time is better fixed by you than silently refused by me.
   if (clash.length) {
     const c = clash[0];
-    const okay = confirm(
-      `This overlaps a shift you already have on ${c.date}: ${describeShift(c)}.\n\n` +
-      `You cannot work two shifts at the same time, so one of them is wrong.\n\nAdd it anyway?`);
-    if (!okay) return;
+    return alert(
+      `You cannot work two shifts at once.\n\n` +
+      `This runs at the same time as ${c.date} · ${describeShift(c)}.\n\n` +
+      `Fix the times, or open that day and change the shift that is already there.`);
   }
-  // Hours-only entries have no clock to compare, so the only impossible thing is a day
-  // that adds up to more than a day.
+  // Hours-only entries carry no clock, so the only impossible thing left is a day adding
+  // up to more than a day.
   const dayTotal = shifts.filter(x => x.date === data.date && x.id !== editingId)
                          .reduce((n, x) => n + workedMin(x), 0) + workedMin(data);
   if (dayTotal > 24 * 60) {
-    if (!confirm(`That would make ${data.date} add up to ${(dayTotal/60).toFixed(1)} hours — more than a day.\n\nAdd it anyway?`)) return;
+    return alert(`That would make ${data.date} add up to ${(dayTotal/60).toFixed(1)} hours.\n\nThere are only 24 in a day.`);
   }
 
   if (editingId) {
@@ -1502,18 +1501,21 @@ function renderExtracted(kind, found) {
   box.innerHTML = found.map((s, i) => {
     // Already saved, or impossible alongside something already saved. Either way it is
     // unticked by default rather than quietly inflating the hours.
+    // Already saved, or impossible alongside something already saved. Not merely unticked —
+    // disabled, so it cannot be added at all.
     const dup = shifts.some(x => identical(x, s));
     const clash = !dup && shifts.some(x => overlaps(x, s));
+    const blocked = dup || clash;
     const when = isTimed(s) ? `${s.start}–${s.end}` : `${(s.mins/60).toFixed(1)}h`;
     const job = jobById(s.jobId);
-    return `<div class="extracted-item">
-      <input type="checkbox" id="${kind}-chk-${i}" ${dup || clash ? '' : 'checked'} onchange="previewCheck('${kind}')">
+    return `<div class="extracted-item" style="${blocked ? 'opacity:.55' : ''}">
+      <input type="checkbox" id="${kind}-chk-${i}" ${blocked ? 'disabled' : 'checked'} onchange="previewCheck('${kind}')">
       <span>${s.date} ${when} <b>${(workedMin(s)/60).toFixed(1)}h</b>
         ${s.night ? '<span class="tag night">night</span>' : ''}
         ${multiJob() ? `<span class="tag job" style="background:${job.color}">${escapeHtml(job.name)}</span>` : ''}
         <span style="color:#999">${escapeHtml(s.label || '')}</span>
         ${dup ? '<span class="tag">already added</span>' : ''}
-        ${clash ? '<span class="tag" style="background:#fdecea;color:#c0392b">overlaps a shift you have</span>' : ''}</span>
+        ${clash ? '<span class="tag" style="background:#fdecea;color:#c0392b">clashes with a shift you have</span>' : ''}</span>
     </div>`;
   }).join('');
   addBtn.style.display = kind === 'ocr' ? 'block' : 'flex';
@@ -1545,20 +1547,30 @@ function previewCheck(kind) {
 
 function addExtracted(kind) {
   const found = pending[kind] || [];
-  let added = 0;
+  const added = [], skipped = [];
+
   found.forEach((s, i) => {
     const chk = document.getElementById(`${kind}-chk-${i}`);
-    if (!chk || !chk.checked) return;
-    shifts.push(stamp({ ...s, id: newId() }));
-    added++;
+    if (!chk || !chk.checked || chk.disabled) return;
+    // Checked against the list as it grows: two lines in the same paste can clash with
+    // each other, not just with what was already saved.
+    const { same, clash } = conflictsWith(s, null);
+    if (same.length || clash.length) { skipped.push(s); return; }
+    const rec = stamp({ ...s, id: newId() });
+    shifts.push(rec);
+    added.push(rec);
   });
+
   save(); render(); pushSoon();
   closeModal(kind === 'ocr' ? 'upload-modal' : 'paste-modal');
-  if (added) {
-    const bad = violations();
-    alert(`Added ${added} shift${added>1?'s':''}.` +
-      (bad.length ? `\n\n⚠️ You are now over the ${settings.limit}h limit in ${bad.length} rolling window${bad.length>1?'s':''}.` : ''));
-  }
+
+  if (!added.length && !skipped.length) return;
+  const bad = violations();
+  alert(
+    (added.length ? `Added ${added.length} shift${added.length > 1 ? 's' : ''}.` : 'Nothing added.') +
+    (skipped.length ? `\n\n${skipped.length} skipped — already there, or clashing with another shift.` : '') +
+    (bad.length ? `\n\n⚠️ You are now over the ${settings.limit}h limit in ${bad.length} rolling window${bad.length > 1 ? 's' : ''}.` : '')
+  );
 }
 
 /* ---------- calendar export ---------- */
