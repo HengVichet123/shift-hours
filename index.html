@@ -264,6 +264,11 @@
   </div>
 
   <div class="card">
+    <h3>Upcoming <span id="shift-count" style="color:#ccc;font-weight:400"></span></h3>
+    <div id="shift-list"></div>
+  </div>
+
+  <div class="card">
     <h3 class="fold" onclick="togglePay()">
       <span>Pay breakdown</span>
       <span class="chev" id="pay-chev">▾</span>
@@ -271,10 +276,6 @@
     <div id="pay-rows"></div>
   </div>
 
-  <div class="card">
-    <h3>Upcoming <span id="shift-count" style="color:#ccc;font-weight:400"></span></h3>
-    <div id="shift-list"></div>
-  </div>
 </main>
 
 <!-- Day detail -->
@@ -706,8 +707,8 @@ function fromDateStr(s) { return new Date(s + 'T00:00:00'); }
 function addDays(s, n) { const d = fromDateStr(s); d.setDate(d.getDate() + n); return toDateStr(d); }
 function parseHM(s) { const [h, m] = s.split(':').map(Number); return h * 60 + m; }
 function yen(n) { return '¥' + Math.round(n).toLocaleString('en-US'); }
-// Every amount on screen goes through this, so one switch hides all of them at once —
-// a money switch that leaves the total showing three lines below would be no switch.
+// Masks only the headline figure on the This month card. The Pay breakdown has its own
+// fold, and the day sheet is somewhere you went looking for the number on purpose.
 function money(n) { return settings.showMoney === false ? '¥-- ---' : yen(n); }
 
 /* ---------- jobs ---------- */
@@ -1076,14 +1077,14 @@ function render() {
         html += `<div class="job-head">
           <span class="jn"><i class="jd" style="background:${g.job.color}"></i>${escapeHtml(g.job.name)}
             <span style="color:#bbb;font-weight:400">${(g.worked/60).toFixed(1)}h</span></span>
-          <span>${money(g.pay)}</span></div>`;
+          <span>${yen(g.pay)}</span></div>`;
       }
       Object.keys(g.buckets).map(Number).sort((a, b) => a - b).forEach(r => {
         const mins = g.buckets[r];
         html += `<div class="row${multiJob() ? ' sub' : ''}">
           <span class="rlabel">${r === reg ? 'Regular' : 'Night'}
             <span class="rhrs">${(mins/60).toFixed(1)}h × ¥${r}</span></span>
-          <span class="rval">${money(r * mins / 60)}</span></div>`;
+          <span class="rval">${yen(r * mins / 60)}</span></div>`;
       });
     });
     if (breakTotal > 0) {
@@ -1091,7 +1092,7 @@ function render() {
         <span class="rlabel">Unpaid break <span class="rhrs">${(breakTotal/60).toFixed(1)}h</span></span>
         <span class="rval">deducted</span></div>`;
     }
-    html += `<div class="row total"><span class="rlabel">Gross</span><span class="rval">${money(gross)}</span></div>`;
+    html += `<div class="row total"><span class="rlabel">Gross</span><span class="rval">${yen(gross)}</span></div>`;
     payRows.innerHTML = html;
   }
   applyPayFold();
@@ -1197,7 +1198,7 @@ function openDay(ds) {
       <div class="tl-head">
         <span class="t">${head} ${jobTag}
           <span style="color:#999;font-weight:400">${escapeHtml(s.label || '')}</span></span>
-        <span class="r">${money(p.pay)}</span>
+        <span class="r">${yen(p.pay)}</span>
       </div>
       ${axis}
       ${trackHtml(s)}
@@ -1226,7 +1227,7 @@ function openDay(ds) {
   }
 
   body.innerHTML = quickAddHtml(ds) + rows +
-    `<div class="row total"><span class="rlabel">${(total/60).toFixed(1)}h worked</span><span class="rval">${money(pay)}</span></div>` +
+    `<div class="row total"><span class="rlabel">${(total/60).toFixed(1)}h worked</span><span class="rval">${yen(pay)}</span></div>` +
     dupWarn +
     windowVerdict(ds, dm);
   document.getElementById('day-modal').classList.add('open');
@@ -2275,7 +2276,7 @@ document.getElementById('ics-second').addEventListener('change', e => {
 });
 
 /* ---------- keeping the installed app up to date ---------- */
-const APP_VERSION = 'v15';
+const APP_VERSION = 'v16';
 
 // Nuke the cached copy of the app and reload from the network. The shifts live in
 // localStorage, which none of this touches.
