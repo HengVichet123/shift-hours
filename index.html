@@ -115,7 +115,10 @@
 
     /* Today, as the key to a day cell — arrows naming each number */
     .key { display: flex; align-items: center; gap: 8px; }
-    .key .cell { width: 52px; flex-shrink: 0; }   /* otherwise identical to a grid cell */
+    .key .cell { width: 64px; flex-shrink: 0; }   /* otherwise identical to a grid cell */
+    .key .cell .dnum { font-size: 0.8rem; }
+    .key .cell .dhrs { font-size: 0.95rem; }
+    .key .cell .run { font-size: 0.66rem; }
     .key .klab {
       flex: 1; min-width: 0; display: flex; flex-direction: column;
       justify-content: center; gap: 3px;
@@ -2429,7 +2432,7 @@ document.getElementById('ics-second').addEventListener('change', e => {
 });
 
 /* ---------- keeping the installed app up to date ---------- */
-const APP_VERSION = 'v24';
+const APP_VERSION = 'v25';
 
 // Nuke the cached copy of the app and reload from the network. The shifts live in
 // localStorage, which none of this touches.
