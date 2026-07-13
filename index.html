@@ -66,7 +66,10 @@
     .cell.has { background: #eef1fe; border-color: #d5ddfc; }
     .cell.risk { background: #fdf0e3; border-color: #f6d5b0; }
     .cell.bad  { background: #fdecea; border-color: #f2c1bc; }
-    .cell .cap { font-size: 0.55rem; color: #aaa; line-height: 1; margin-top: 2px; }
+    /* running total of the 7 days ending on this one */
+    .cell .run { font-size: 0.56rem; color: #aaa; line-height: 1; margin-top: 2px; font-variant-numeric: tabular-nums; }
+    .cell .run.warn { color: #e67e22; font-weight: 700; }
+    .cell .run.over { color: #e74c3c; font-weight: 700; }
 
     /* Time axis — a shift drawn where it actually falls in the day */
     .axis { display: flex; justify-content: space-between; font-size: 0.58rem; color: #bbb; margin-bottom: 3px; }
@@ -205,7 +208,7 @@
       <span><i class="dot" style="background:#d5ddfc"></i>worked</span>
       <span><i class="dot" style="background:#f6d5b0"></i>close to 28h</span>
       <span><i class="dot" style="background:#f2c1bc"></i>over 28h</span>
-      <span style="margin-left:auto">tap a day to see its 7-day check</span>
+      <span style="margin-left:auto">small number = the 7 days ending that day</span>
     </div>
   </div>
 
@@ -572,6 +575,12 @@ function windowTotal(start, dm) {
   for (let i = 0; i < 7; i++) t += dm[addDays(start, i)] || 0;
   return t;
 }
+// The 7 days ending on `date` — "count back 7 days from here". This is the number
+// shown on every day cell.
+function back7(date, dm) {
+  return windowTotal(addDays(date, -6), dm);
+}
+
 // Every 7-day window that contains `date` — there are 7 of them.
 function windowsContaining(date, dm) {
   const out = [];
@@ -580,14 +589,6 @@ function windowsContaining(date, dm) {
     out.push({ start, end: addDays(start, 6), total: windowTotal(start, dm) });
   }
   return out;
-}
-// The tightest window over this day decides how much more may be worked on it.
-function capacityOn(date, dm) {
-  const limit = settings.limit * 60;
-  return Math.max(0, Math.min(...windowsContaining(date, dm).map(w => limit - w.total)));
-}
-function worstWindowOn(date, dm) {
-  return Math.max(...windowsContaining(date, dm).map(w => w.total));
 }
 // All violating windows across the whole dataset, merged so one long overrun
 // doesn't produce seven near-identical warnings.
@@ -641,18 +642,20 @@ function render() {
   for (let day = 1; day <= daysInMonth; day++) {
     const ds = toDateStr(new Date(year, month, day));
     const mins = dm[ds] || 0;
-    const worst = worstWindowOn(ds, dm);
+    const run = back7(ds, dm);          // the 7 days ending on this one
 
     const c = document.createElement('div');
     let cls = 'cell';
     if (ds === today) cls += ' today';
-    if (worst > limitMin) cls += ' bad';
-    else if (mins > 0 && worst > limitMin * 0.9) cls += ' risk';
+    if (run > limitMin) cls += ' bad';
+    else if (run > limitMin * 0.9) cls += ' risk';
     else if (mins > 0) cls += ' has';
     c.className = cls;
 
     const hrs = mins > 0 ? `<div class="dhrs">${(mins/60).toFixed(1)}</div>` : '';
-    c.innerHTML = `<div class="dnum">${day}</div>${hrs}`;
+    const runCls = run > limitMin ? 'run over' : run > limitMin * 0.9 ? 'run warn' : 'run';
+    const runTxt = run > 0 ? `<div class="${runCls}">${(run/60).toFixed(1)}</div>` : '';
+    c.innerHTML = `<div class="dnum">${day}</div>${hrs}${runTxt}`;
     c.onclick = () => openDay(ds);
     grid.appendChild(c);
   }
@@ -879,22 +882,33 @@ function deleteFromDay(btn, id, ds) {
   openDay(ds);   // stay on the day so you can keep working on it
 }
 
-// The verdict on a day: of the seven 7-day stretches this day sits in, the fullest one
-// decides whether the schedule is legal. Name it, so the number is never mysterious.
+// Leads with the same number the day cell shows — the 7 days ending here — then flags
+// any other stretch through this day that is over, so nothing hides behind the headline.
 function windowVerdict(ds, dm) {
   const limitMin = settings.limit * 60;
-  const w = windowsContaining(ds, dm).reduce((a, b) => b.total > a.total ? b : a);
-  const hrs = (w.total / 60).toFixed(1);
+  const run = back7(ds, dm);
+  const range = shortRange(addDays(ds, -6), ds);
+  const hrs = (run / 60).toFixed(1);
 
-  if (w.total > limitMin) {
+  if (run > limitMin) {
     return `<div class="alert" style="margin-top:10px">
       <b>⚠️ Over the limit</b>
-      The 7 days ${shortRange(w.start, w.end)} add up to <b>${hrs}h</b> —
-      ${((w.total - limitMin) / 60).toFixed(1)}h over ${settings.limit}h.</div>`;
+      The 7 days ending here (${range}) add up to <b>${hrs}h</b> —
+      ${((run - limitMin) / 60).toFixed(1)}h over ${settings.limit}h.</div>`;
   }
-  return `<p class="hint" style="margin-top:10px">
-    Fullest 7-day stretch containing this day: ${shortRange(w.start, w.end)} =
-    <b>${hrs}h</b> of ${settings.limit}h. Within the limit.</p>`;
+
+  let html = `<p class="hint" style="margin-top:10px">
+    The 7 days ending here (${range}) = <b>${hrs}h</b> of ${settings.limit}h. Within the limit.</p>`;
+
+  // A day can be clean looking backward and still sit inside a stretch that breaks later.
+  const other = windowsContaining(ds, dm).filter(w => w.total > limitMin);
+  if (other.length) {
+    const w = other.reduce((a, b) => b.total > a.total ? b : a);
+    html += `<div class="alert" style="margin-top:8px">But this day falls inside
+      ${shortRange(w.start, w.end)}, which reaches <b>${(w.total / 60).toFixed(1)}h</b> —
+      over ${settings.limit}h.</div>`;
+  }
+  return html;
 }
 
 function shortRange(a, b) {
