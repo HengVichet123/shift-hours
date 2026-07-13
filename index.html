@@ -547,6 +547,14 @@
     </div>
 
     <p style="font-size:0.8rem;font-weight:600;margin:18px 0 8px">Data</p>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <button class="btn-save" style="flex:1" onclick="saveBackupFile()">💾 Save backup file</button>
+      <button class="btn-outline" style="flex:1" onclick="document.getElementById('restore-file').click()">Restore from file</button>
+    </div>
+    <input type="file" id="restore-file" accept=".json,application/json,text/plain" style="display:none" onchange="restoreFromFile(event)">
+    <p class="hint" style="margin-bottom:10px">Downloads everything as one file. On iPhone, tap
+      <b>Save to Files</b> (or send it to iCloud) — that copy survives losing the phone, which the
+      backups above do not.</p>
     <div style="display:flex;gap:8px;margin-bottom:10px">
       <button class="btn-outline" style="flex:1" onclick="exportData()">Copy all data</button>
       <button class="btn-outline" style="flex:1" onclick="showImportBox()">Paste &amp; import</button>
@@ -2136,6 +2144,72 @@ function exportData() {
       alert('Could not copy automatically — the data is in the box below, select and copy it.');
     });
 }
+/* --- a real file, the only copy that survives losing the phone --- */
+function backupPayload() {
+  return {
+    app: 'swift',
+    version: APP_VERSION,
+    savedAt: new Date().toISOString(),
+    shifts: shifts,
+    settings: settings
+  };
+}
+function saveBackupFile() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  const name = `swift-backup-${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}.json`;
+
+  const blob = new Blob([JSON.stringify(backupPayload(), null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  alert(`${shifts.length} shift${shifts.length === 1 ? '' : 's'} saved to ${name}.\n\nOn iPhone choose "Save to Files" so the copy lives outside the app.`);
+}
+
+function restoreFromFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let data;
+    try {
+      data = JSON.parse(reader.result);
+    } catch {
+      return alert('That file is not readable — it does not look like a Swift backup.');
+    }
+    // Accept a backup file, or the older copy-all-data payload.
+    let newShifts = null, newSettings = null;
+    if (Array.isArray(data.shifts)) {
+      newShifts = data.shifts;
+      newSettings = data.settings || null;
+    } else if (typeof data.sh_shifts === 'string') {
+      try { newShifts = JSON.parse(data.sh_shifts); } catch {}
+      try { newSettings = data.sh_settings ? JSON.parse(data.sh_settings) : null; } catch {}
+    }
+    if (!Array.isArray(newShifts)) {
+      return alert('That file does not contain any shifts.');
+    }
+    const when = data.savedAt ? new Date(data.savedAt).toLocaleString() : 'an unknown date';
+    if (!confirm(`Replace everything with this backup?\n\n${newShifts.length} shifts, saved ${when}.\n\nYour current shifts are backed up first, so this can be undone.`)) return;
+
+    snapshot('before restoring from file');
+    localStorage.setItem('sh_shifts', JSON.stringify(newShifts));
+    if (newSettings) localStorage.setItem('sh_settings', JSON.stringify(newSettings));
+    storageBroken = false;
+    load(); render();
+    closeModal('settings-modal');
+    alert(`Restored ${shifts.length} shifts.`);
+  };
+  reader.onerror = () => alert('Could not read that file.');
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
 function showImportBox() {
   const b = document.getElementById('import-box');
   b.style.display = b.style.display === 'none' ? 'block' : 'none';
@@ -2355,7 +2429,7 @@ document.getElementById('ics-second').addEventListener('change', e => {
 });
 
 /* ---------- keeping the installed app up to date ---------- */
-const APP_VERSION = 'v23';
+const APP_VERSION = 'v24';
 
 // Nuke the cached copy of the app and reload from the network. The shifts live in
 // localStorage, which none of this touches.
