@@ -37,6 +37,11 @@
 
     .card { background: white; border-radius: 12px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
     .card h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: #888; font-weight: 600; margin-bottom: 8px; }
+    .card h3.fold { display: flex; justify-content: space-between; align-items: center; cursor: pointer; touch-action: manipulation; margin-bottom: 0; padding: 2px 0; }
+    .card h3.fold .chev { font-size: 0.7rem; color: #bbb; transition: transform 0.15s; }
+    .card h3.fold.closed .chev { transform: rotate(-90deg); }
+    .card h3.fold + div { margin-top: 8px; }
+    .card h3.fold.closed + div { display: none; }
 
     .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .stat-big { font-size: 1.6rem; font-weight: 700; line-height: 1.2; }
@@ -222,7 +227,10 @@
   </div>
 
   <div class="card">
-    <h3>Pay breakdown</h3>
+    <h3 class="fold" onclick="togglePay()">
+      <span>Pay breakdown</span>
+      <span class="chev" id="pay-chev">▾</span>
+    </h3>
     <div id="pay-rows"></div>
   </div>
 
@@ -489,6 +497,7 @@ const DEFAULT_SETTINGS = {
   name: '',
   limit: 28,
   autoBreak: true,
+  showPay: true,   // the Pay breakdown card, folded or not — remembered between sessions
   jobs: [{ id: 'j1', name: 'Job', color: JOB_COLORS[0], bands: DEFAULT_BANDS.map(b => ({ ...b })) }]
 };
 
@@ -780,6 +789,16 @@ function escapeHtml(s) {
 function changeMonth(dir) { monthOffset += dir; render(); }
 function sortKey(s) { return isTimed(s) ? s.start : '99:99'; }
 
+function togglePay() {
+  settings.showPay = !settings.showPay;
+  settings.updatedAt = Date.now();
+  save();
+  applyPayFold();
+}
+function applyPayFold() {
+  document.querySelector('.card h3.fold').classList.toggle('closed', !settings.showPay);
+}
+
 function render() {
   const dm = dayMap();
   const view = monthView();
@@ -932,6 +951,7 @@ function render() {
     html += `<div class="row total"><span class="rlabel">Gross</span><span class="rval">${yen(gross)}</span></div>`;
     payRows.innerHTML = html;
   }
+  applyPayFold();
 
   /* --- upcoming, today onward, across months --- */
   const upcoming = shifts
