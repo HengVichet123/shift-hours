@@ -60,6 +60,7 @@
     .switch.on { background: #27ae60; }
     .switch.on i { transform: translateX(15px); }
     .stat-sub { font-size: 0.72rem; color: #999; margin-top: 2px; }
+    .stat-sub.hidden { color: #d5d5d5; }
     .ok { color: #27ae60; } .warn { color: #e67e22; } .over { color: #e74c3c; }
     .meter { height: 6px; background: #eee; border-radius: 3px; margin-top: 8px; overflow: hidden; }
     .meter-fill { height: 100%; border-radius: 3px; transition: width 0.2s; }
@@ -919,6 +920,7 @@ function applyMoneySwitch() {
   const on = settings.showMoney !== false;
   document.getElementById('money-switch').classList.toggle('on', on);
   document.getElementById('stat-pay').classList.toggle('hidden', !on);
+  document.getElementById('stat-hours').classList.toggle('hidden', !on);
 }
 
 function togglePay() {
@@ -1065,9 +1067,12 @@ function render() {
     gross += p.pay; workedTotal += p.worked; breakTotal += p.brk;
   });
 
+  // The switch hides the whole card's figures — the hours are as private as the money.
+  const showMoney = settings.showMoney !== false;
   document.getElementById('stat-pay').textContent = money(gross);
+  document.getElementById('stat-hours').textContent =
+    showMoney ? (workedTotal / 60).toFixed(1) + 'h worked' : '--.-h worked';
   applyMoneySwitch();
-  document.getElementById('stat-hours').textContent = (workedTotal / 60).toFixed(1) + 'h worked';
 
   const payRows = document.getElementById('pay-rows');
   if (!byJob.size) {
@@ -2279,7 +2284,7 @@ document.getElementById('ics-second').addEventListener('change', e => {
 });
 
 /* ---------- keeping the installed app up to date ---------- */
-const APP_VERSION = 'v17';
+const APP_VERSION = 'v18';
 
 // Nuke the cached copy of the app and reload from the network. The shifts live in
 // localStorage, which none of this touches.
