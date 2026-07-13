@@ -10,11 +10,13 @@ create table if not exists public.shifts (
   user_id    uuid        not null references auth.users (id) on delete cascade,
   id         text        not null,             -- client-generated, stable across devices
   date       date        not null,
-  start_time text        not null,             -- "13:00"
-  end_time   text        not null,             -- "18:00" ("00:00" = midnight)
+  start_time text        not null default '',  -- "13:00", empty for hours-only shifts
+  end_time   text        not null default '',  -- "18:00" ("00:00" = midnight)
+  mins       integer,                          -- set instead of start/end: hours-only entry
+  night      boolean     not null default false, -- hours-only entry paid at the night rate
+  job_id     text        not null default '',  -- which job this shift belongs to
   label      text        not null default '',
   brk        integer,                          -- null = use the automatic break
-  holiday    boolean     not null default false,
   deleted    boolean     not null default false,  -- soft delete, so removals propagate
   updated_at timestamptz not null default now(), -- last-write-wins on conflict
   primary key (user_id, id)

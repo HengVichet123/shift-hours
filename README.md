@@ -43,15 +43,38 @@ Every minute is priced by the band it actually falls in, so an 18:00–24:00 shi
 
 ---
 
+## Jobs
+
+Several employers, each with their own rate bands (⚙️ → Jobs). Pay is worked out per job;
+**the 28-hour limit is the total across all of them**, which is how immigration counts it.
+
 ## Adding shifts
 
 | Button | Action |
 |--------|--------|
-| `＋` | Add one by hand (or tap any day in the grid) |
+| `＋` | Add one by hand — **Start & end**, or **Just hours** |
 | `📷` | Photo of the shift table — OCR reads the dates and times |
-| `📝` | **Paste the text your work sends you** |
+| `📝` | **Paste from work, or type quickly** |
 | `⏰` | Export to the iPhone Calendar with an alarm |
-| `⚙️` | Rate bands, limit, breaks, backup |
+| `⚙️` | Name, limit, breaks, jobs and rates |
+
+### Quick typing
+
+For a month you have already worked, times are a waste of keystrokes. Type hours:
+
+```
+18 -> 3                      3 hours on the 18th
+19 -> 4
+18: 3 family mart, 4 lamu    two jobs in one day
+22 = 5n                      5 hours at the night rate
+```
+
+The day is in the month you are looking at. `3h`, `3 hours`, `3時間` all work; `at` is optional.
+
+An hours-only entry has no clock, so the app cannot tell which hours were late — it pays the
+job's **regular** rate unless you add `n` (or tick "night rate"). No break is deducted either;
+the hours you type are taken as hours actually worked. Enter start and end times when you want
+the night split and the break rule applied properly.
 
 The paste parser reads the format work actually sends:
 

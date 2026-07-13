@@ -42,7 +42,6 @@
     .stat-big { font-size: 1.6rem; font-weight: 700; line-height: 1.2; }
     .stat-sub { font-size: 0.72rem; color: #999; margin-top: 2px; }
     .ok { color: #27ae60; } .warn { color: #e67e22; } .over { color: #e74c3c; }
-
     .meter { height: 6px; background: #eee; border-radius: 3px; margin-top: 8px; overflow: hidden; }
     .meter-fill { height: 100%; border-radius: 3px; transition: width 0.2s; }
 
@@ -52,7 +51,9 @@
     .alert li { margin-top: 2px; }
 
     /* Month grid */
-    .grid-head, .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+    /* minmax(0,1fr), not 1fr — otherwise a cell's min-content (the running total) can
+       widen its track and push the last column off the screen. */
+    .grid-head, .grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
     .grid-head div { text-align: center; font-size: 0.65rem; color: #999; font-weight: 600; padding-bottom: 4px; text-transform: uppercase; }
     .cell {
       aspect-ratio: 1 / 1; border-radius: 8px; background: #fafafa; border: 1px solid #f0f0f0;
@@ -66,22 +67,23 @@
     .cell.has { background: #eef1fe; border-color: #d5ddfc; }
     .cell.risk { background: #fdf0e3; border-color: #f6d5b0; }
     .cell.bad  { background: #fdecea; border-color: #f2c1bc; }
-    /* running total of the 7 days ending on this one */
     .cell .run { font-size: 0.56rem; color: #aaa; line-height: 1; margin-top: 2px; font-variant-numeric: tabular-nums; }
     .cell .run.warn { color: #e67e22; font-weight: 700; }
     .cell .run.over { color: #e74c3c; font-weight: 700; }
+    .cell .dots { display: flex; gap: 2px; margin-top: 2px; }
+    .cell .dots i { width: 4px; height: 4px; border-radius: 50%; display: block; }
 
-    /* Time axis — a shift drawn where it actually falls in the day */
+    /* Time axis */
     .axis { display: flex; justify-content: space-between; font-size: 0.58rem; color: #bbb; margin-bottom: 3px; }
     .track { position: relative; height: 22px; background: #f4f4f6; border-radius: 5px; overflow: hidden; }
     .track .tick { position: absolute; top: 0; bottom: 0; width: 1px; background: #e8e8ec; }
     .seg { position: absolute; top: 0; bottom: 0; }
-    .seg.reg { background: #4a6cf7; }
-    .seg.nig { background: #7d5fc4; }
+    .seg.nig { filter: brightness(0.68); }
+    .noclock { display: flex; align-items: center; justify-content: center; height: 22px; border-radius: 5px; color: white; font-size: 0.68rem; font-weight: 600; }
 
     .tl-row { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #f2f2f2; }
     .tl-row:last-of-type { border-bottom: none; }
-    .tl-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.78rem; margin-bottom: 4px; }
+    .tl-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.78rem; margin-bottom: 4px; gap: 8px; }
     .tl-head .t { font-weight: 600; }
     .tl-head .r { color: #999; font-size: 0.72rem; }
     .tl-foot { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
@@ -103,6 +105,10 @@
     .row.total { border-top: 2px solid #eee; border-bottom: none; margin-top: 4px; padding-top: 8px; font-size: 1rem; }
     .row.total .rval { font-size: 1.15rem; color: #1a1a2e; }
     .row.deduct .rval { color: #999; font-weight: 400; }
+    .row.sub { padding-left: 12px; font-size: 0.8rem; }
+    .job-head { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-bottom: 3px; font-size: 0.82rem; font-weight: 700; }
+    .job-head .jn { display: flex; align-items: center; gap: 6px; }
+    .job-head .jd { width: 9px; height: 9px; border-radius: 3px; }
 
     /* Shift list */
     .shift-item { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #f4f4f4; cursor: pointer; font-size: 0.82rem; }
@@ -113,10 +119,9 @@
     .shift-item .shrs { color: #aaa; width: 36px; flex-shrink: 0; font-variant-numeric: tabular-nums; text-align: right; }
     .shift-item .slabel { color: #999; flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; }
     .shift-item .ltxt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .shift-item .spay { font-weight: 600; font-variant-numeric: tabular-nums; }
     .tag { font-size: 0.6rem; padding: 1px 5px; border-radius: 4px; background: #eee; color: #777; flex-shrink: 0; }
     .tag.night { background: #ede7f6; color: #6a4bab; }
-    .tag.holi { background: #fdecea; color: #c0392b; }
+    .tag.job { color: white; }
     .empty { color: #bbb; font-size: 0.82rem; text-align: center; padding: 12px 0; }
 
     /* Modal */
@@ -140,21 +145,29 @@
     .chk { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem; color: #333; }
     .chk input { width: auto; margin: 0; }
 
+    /* Times / Hours switch */
+    .modes { display: flex; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; margin-bottom: 12px; }
+    .modes button { flex: 1; border: none; background: white; padding: 9px 0; font-size: 0.83rem; cursor: pointer; color: #666; touch-action: manipulation; }
+    .modes button.on { background: #1a1a2e; color: white; font-weight: 600; }
+
     .upload-area { border: 2px dashed #ccc; border-radius: 10px; padding: 16px; text-align: center; cursor: pointer; margin-bottom: 10px; }
     .upload-area p { color: #888; font-size: 0.8rem; margin-top: 6px; }
     .extracted-list { max-height: 200px; overflow-y: auto; margin: 8px 0; }
     .extracted-item { display: flex; align-items: center; gap: 8px; padding: 5px 8px; background: #f8f8f8; border-radius: 6px; margin-bottom: 4px; font-size: 0.76rem; }
     .extracted-item input[type=checkbox] { flex-shrink: 0; width: 16px; height: 16px; }
 
-    /* Rate bands editor */
+    /* Jobs + rate bands */
     .band-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
     .band-row input { padding: 6px 8px; font-size: 0.82rem; }
-    .band-row .bt { width: 78px; flex-shrink: 0; }
+    .band-row .bt { width: 76px; flex-shrink: 0; }
     .band-row .br { flex: 1; }
     .band-row .bx { background: #fee; color: #e74c3c; border: 1px solid #fcc; border-radius: 6px; width: 30px; height: 32px; flex-shrink: 0; cursor: pointer; font-size: 0.9rem; touch-action: manipulation; }
     .band-err { color: #e74c3c; font-size: 0.74rem; margin-top: 4px; }
+    .job-card { border: 1px solid #eee; border-radius: 10px; padding: 10px; margin-bottom: 8px; }
+    .job-top { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+    .job-top .jc { width: 34px; height: 34px; border: 1px solid #ddd; border-radius: 8px; padding: 2px; flex-shrink: 0; }
+    .job-top .jx { background: #fee; color: #e74c3c; border: 1px solid #fcc; border-radius: 6px; width: 34px; height: 34px; flex-shrink: 0; cursor: pointer; touch-action: manipulation; }
 
-    /* Verdict on an import: would these shifts break the limit? */
     .verdict { border-radius: 10px; padding: 9px 11px; font-size: 0.78rem; margin: 8px 0 2px; }
     .verdict.ok { background: #eaf7ef; border: 1px solid #c6e9d5; color: #1e8449; }
     .verdict.bad { background: #fdecea; border: 1px solid #f5c6c2; color: #a93226; }
@@ -170,7 +183,7 @@
     <div class="hdr-actions">
       <button class="hdr-btn" title="Add shift" onclick="openAddModal()">＋</button>
       <button class="hdr-btn" title="Read shift photo" onclick="openUploadModal()">📷</button>
-      <button class="hdr-btn" title="Paste shift text" onclick="openPasteModal()">📝</button>
+      <button class="hdr-btn" title="Paste or type shifts" onclick="openPasteModal()">📝</button>
       <button class="hdr-btn" title="Export to calendar with alarm" onclick="openIcsModal()">⏰</button>
       <button class="hdr-btn" id="account-btn" title="Account" onclick="openAccount()" style="display:none">👤</button>
       <button class="hdr-btn" title="Settings" onclick="openSettings()">⚙️</button>
@@ -204,12 +217,7 @@
     <h3>Hours by day</h3>
     <div class="grid-head"><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div></div>
     <div class="grid" id="month-grid"></div>
-    <div class="legend">
-      <span><i class="dot" style="background:#d5ddfc"></i>worked</span>
-      <span><i class="dot" style="background:#f6d5b0"></i>close to 28h</span>
-      <span><i class="dot" style="background:#f2c1bc"></i>over 28h</span>
-      <span style="margin-left:auto">small number = the 7 days ending that day</span>
-    </div>
+    <div class="legend" id="legend"></div>
   </div>
 
   <div class="card">
@@ -241,24 +249,47 @@
   <div class="modal">
     <div class="modal-handle"></div>
     <h2 id="modal-title">Add Shift</h2>
-    <div class="form-group"><label>Date</label><input type="date" id="input-date"></div>
-    <div class="form-row">
-      <div class="form-group"><label>Start</label><input type="time" id="input-start"></div>
-      <div class="form-group"><label>End</label><input type="time" id="input-end"></div>
+
+    <div class="modes">
+      <button id="mode-times" onclick="setMode('times')">Start &amp; end</button>
+      <button id="mode-hours" onclick="setMode('hours')">Just hours</button>
     </div>
-    <p class="hint" id="cross-hint" style="display:none">Ends past midnight — counted as the same working day.</p>
-    <div class="form-group"><label>Place / label</label><input type="text" id="input-label" placeholder="豊橋野依インター"></div>
-    <div class="form-row">
+
+    <div class="form-group"><label>Date</label><input type="date" id="input-date"></div>
+
+    <div class="form-group" id="job-group">
+      <label>Job</label>
+      <select id="input-job"></select>
+    </div>
+
+    <div id="times-fields">
+      <div class="form-row">
+        <div class="form-group"><label>Start</label><input type="time" id="input-start"></div>
+        <div class="form-group"><label>End</label><input type="time" id="input-end"></div>
+      </div>
+      <p class="hint" id="cross-hint" style="display:none">Ends past midnight — counted as the same working day.</p>
       <div class="form-group">
         <label>Break (min)</label>
         <input type="number" id="input-break" min="0" step="5" placeholder="auto">
         <p class="hint" id="break-hint"></p>
       </div>
+    </div>
+
+    <div id="hours-fields" style="display:none">
       <div class="form-group">
-        <label>&nbsp;</label>
-        <label class="chk" style="padding-top:8px"><input type="checkbox" id="input-holiday"> Holiday rate</label>
+        <label>Hours worked</label>
+        <input type="number" id="input-hours" min="0" step="0.5" placeholder="3">
+        <p class="hint">Taken as hours you actually worked — no break is deducted.</p>
+      </div>
+      <div class="form-group">
+        <label class="chk"><input type="checkbox" id="input-night"> Paid at the night rate</label>
+        <p class="hint">Without start and end times the app can't tell which hours were late,
+          so it uses this job's regular rate unless you tick this.</p>
       </div>
     </div>
+
+    <div class="form-group"><label>Note (optional)</label><input type="text" id="input-label" placeholder=""></div>
+
     <div class="modal-actions">
       <button class="btn-danger" id="delete-btn" style="display:none" onclick="deleteCurrentShift()">Delete</button>
       <button class="btn-outline" onclick="closeModal('add-modal')">Cancel</button>
@@ -272,6 +303,10 @@
   <div class="modal">
     <div class="modal-handle"></div>
     <h2>Read Shift Photo</h2>
+    <div class="form-group" id="ocr-job-group">
+      <label>These shifts are for</label>
+      <select id="ocr-job"></select>
+    </div>
     <div class="upload-area" onclick="document.getElementById('file-input').click()">
       <div style="font-size:1.5rem">📷</div>
       <p>Tap to select a screenshot</p>
@@ -287,13 +322,17 @@
   </div>
 </div>
 
-<!-- Paste text -->
+<!-- Paste / quick type -->
 <div class="modal-overlay" id="paste-modal">
   <div class="modal">
     <div class="modal-handle"></div>
-    <h2>Paste Shift Text</h2>
-    <textarea id="paste-text" style="height:110px" placeholder="▢2026/07/23 (木) 13:00〜18:00 豊橋野依インター ▢2026/07/24 (金) 11:00〜15:30 豊橋野依インター"></textarea>
-    <p class="hint">Paste the message from work. Entries can be on one line or many. Understands 2026/07/23 or 7/23, 〜 ~ or -, and end times past midnight.</p>
+    <h2>Paste or Type Shifts</h2>
+    <div class="form-group" id="paste-job-group">
+      <label>Default job <span style="color:#bbb;font-weight:400">(when a line doesn't name one)</span></label>
+      <select id="paste-job"></select>
+    </div>
+    <textarea id="paste-text" style="height:110px" placeholder="18 -> 3&#10;19 -> 4&#10;22 -> 5 lamu"></textarea>
+    <p class="hint" id="paste-help"></p>
     <div class="modal-actions" style="margin-bottom:6px">
       <button class="btn-outline" onclick="closeModal('paste-modal')">Cancel</button>
       <button class="btn-save" onclick="doParsePaste()">Read</button>
@@ -313,7 +352,7 @@
     <div class="modal-handle"></div>
     <h2>Shift Alarms</h2>
     <p class="hint" style="margin-bottom:12px">
-      A web app can't set a real alarm on iOS — notifications can't be scheduled for a future time from a browser.
+      A web app can't set an alarm on iOS — notifications can't be scheduled for a future time from a browser.
       Instead this hands your shifts to the iPhone Calendar, which <i>can</i>. Import once and iOS alerts you before every shift.
     </p>
     <div class="form-row">
@@ -341,8 +380,8 @@
       <button class="btn-save" onclick="downloadIcs()">Download .ics</button>
     </div>
     <p class="hint" style="margin-top:10px">
-      Tap Download → iOS opens it → <b>Add All</b>. Re-export whenever you add shifts; re-importing the same shift updates it
-      instead of duplicating it.
+      Tap Download → iOS opens it → <b>Add All</b>. Re-export whenever you add shifts; re-importing the same shift
+      updates it instead of duplicating it.
     </p>
   </div>
 </div>
@@ -352,18 +391,13 @@
   <div class="modal">
     <div class="modal-handle"></div>
     <h2>Account</h2>
-
     <div id="signed-out">
       <p class="hint" style="margin-bottom:12px">
-        Sign in to keep your shifts on every device. Your data is yours alone — the database
-        refuses to hand your rows to anyone else. Without an account the app still works,
+        Sign in to keep your shifts on every device. Without an account the app still works,
         just only on this device.
       </p>
       <div class="form-group"><label>Email</label><input type="email" id="auth-email" autocomplete="username" placeholder="you@example.com"></div>
-      <div class="form-group">
-        <label>Password</label>
-        <input type="password" id="auth-pass" autocomplete="current-password" placeholder="at least 6 characters">
-      </div>
+      <div class="form-group"><label>Password</label><input type="password" id="auth-pass" autocomplete="current-password" placeholder="at least 6 characters"></div>
       <div id="auth-msg" class="hint"></div>
       <div class="modal-actions">
         <button class="btn-outline" onclick="closeModal('account-modal')">Cancel</button>
@@ -371,7 +405,6 @@
         <button class="btn-save" onclick="doSignIn()">Sign in</button>
       </div>
     </div>
-
     <div id="signed-in" style="display:none">
       <div class="row" style="border:none;padding:0 0 10px">
         <span class="rlabel">Signed in as</span>
@@ -385,9 +418,6 @@
       <button class="btn-save" style="width:100%;margin-bottom:8px" onclick="syncNow(true)">Sync now</button>
       <button class="btn-outline" style="width:100%;margin-bottom:8px" onclick="closeModal('account-modal')">Close</button>
       <button class="btn-danger" style="width:100%" onclick="doSignOut()">Sign out</button>
-      <p class="hint" style="margin-top:10px">
-        Signing out leaves the shifts on this device; it does not delete anything from the cloud.
-      </p>
     </div>
   </div>
 </div>
@@ -401,33 +431,25 @@
     <div class="form-group">
       <label>Your name</label>
       <input type="text" id="set-name" placeholder="Vichet" maxlength="24">
-      <p class="hint">Just shown at the top of your own app. Stays on this device.</p>
     </div>
 
     <div class="form-group">
       <label>Weekly limit (hours in any 7 consecutive days)</label>
       <input type="number" id="set-limit" min="1" step="0.5">
-      <p class="hint">Student visa 資格外活動許可 is 28h. This is checked as a rolling window, not Mon–Sun.</p>
-    </div>
-
-    <div class="form-group">
-      <label>Hourly rate bands</label>
-      <div id="band-editor"></div>
-      <button class="btn-outline" style="width:100%;margin-top:4px" onclick="addBandRow()">+ Add band</button>
-      <div class="band-err" id="band-err"></div>
-      <p class="hint">Bands must cover 00:00–24:00 with no gaps or overlaps. Hours are priced by the band they actually fall in, so an 18:00–24:00 shift is part regular, part night.</p>
-    </div>
-
-    <div class="form-group">
-      <label>Holiday rate (¥/h, optional)</label>
-      <input type="number" id="set-holiday" min="0" step="10" placeholder="off — leave blank">
-      <p class="hint">If set, a shift ticked "Holiday rate" is paid entirely at this rate, ignoring the bands.</p>
+      <p class="hint">Student visa 資格外活動許可 is 28h. Checked as a rolling window, not Mon–Sun —
+        and it counts <b>every job added together</b>, which is how immigration counts it.</p>
     </div>
 
     <div class="form-group">
       <label class="chk"><input type="checkbox" id="set-autobreak"> Auto-deduct unpaid breaks</label>
-      <p class="hint">45 min once a shift passes 6h, 60 min once it passes 8h (労基法34条). Deducted from both pay and the 28h count, spread across the bands the shift spans. Override per shift.</p>
+      <p class="hint">45 min once a shift passes 6h, 60 min once it passes 8h (労基法34条). Applies to shifts
+        entered with start and end times. Hours-only entries are taken as already-worked hours.</p>
     </div>
+
+    <p style="font-size:0.8rem;font-weight:600;margin:16px 0 8px">Jobs</p>
+    <div id="jobs-editor"></div>
+    <button class="btn-outline" style="width:100%;margin-top:4px" onclick="addJob()">+ Add job</button>
+    <div class="band-err" id="band-err"></div>
 
     <div class="modal-actions">
       <button class="btn-outline" onclick="closeModal('settings-modal')">Cancel</button>
@@ -450,27 +472,27 @@
 <script>
 /* ---------- constants & state ---------- */
 const DAY = 1440;
+const JOB_COLORS = ['#4a6cf7', '#27ae60', '#e67e22', '#9b59b6', '#e91e63', '#1abc9c', '#607d8b'];
+const DEFAULT_BANDS = [
+  { start: '00:00', end: '06:00', rate: 1420 },
+  { start: '06:00', end: '22:00', rate: 1140 },
+  { start: '22:00', end: '24:00', rate: 1420 }
+];
 const DEFAULT_SETTINGS = {
+  name: '',
   limit: 28,
-  bands: [
-    { start: '00:00', end: '06:00', rate: 1420 },
-    { start: '06:00', end: '22:00', rate: 1140 },
-    { start: '22:00', end: '24:00', rate: 1420 }
-  ],
-  holidayRate: null,
-  autoBreak: true
-};
-// Cloud sync is optional. Leave these blank and the app is purely local — no login
-// button, no network. The anon key is safe to publish: it grants nothing on its own,
-// because every table is behind row-level security (see supabase-schema.sql).
-const CLOUD = {
-  url: '',
-  anonKey: ''
+  autoBreak: true,
+  jobs: [{ id: 'j1', name: 'Job', color: JOB_COLORS[0], bands: DEFAULT_BANDS.map(b => ({ ...b })) }]
 };
 
-let shifts = [], settings = { ...DEFAULT_SETTINGS }, monthOffset = 0, editingId = null;
+// Cloud sync is optional. Leave these blank and the app is purely local — no login
+// button, no network. The anon key is safe to publish: every table is behind
+// row-level security (see supabase-schema.sql).
+const CLOUD = { url: '', anonKey: '' };
+
+let shifts = [], settings = null, monthOffset = 0, editingId = null, addMode = 'times';
 let pending = { ocr: [], paste: [] };
-let tombs = [];        // { id, updatedAt } for deleted shifts, so removals reach other devices
+let tombs = [];
 let sb = null, user = null;
 
 /* ---------- storage ---------- */
@@ -479,15 +501,39 @@ function stamp(s) { s.updatedAt = Date.now(); return s; }
 function load() {
   try { shifts = JSON.parse(localStorage.getItem('sh_shifts') || '[]'); } catch { shifts = []; }
   try { tombs = JSON.parse(localStorage.getItem('sh_tombs') || '[]'); } catch { tombs = []; }
-  try {
-    const s = JSON.parse(localStorage.getItem('sh_settings') || 'null');
-    settings = s ? { ...DEFAULT_SETTINGS, ...s } : { ...DEFAULT_SETTINGS };
-  } catch { settings = { ...DEFAULT_SETTINGS }; }
-  // Shifts saved before sync existed have no clock on them; treat them as current so
-  // the first sync pushes them up rather than letting an empty cloud erase them.
-  let migrated = false;
-  shifts.forEach(s => { if (!s.updatedAt) { s.updatedAt = Date.now(); migrated = true; } });
-  if (migrated) localStorage.setItem('sh_shifts', JSON.stringify(shifts));
+  let raw = {};
+  try { raw = JSON.parse(localStorage.getItem('sh_settings') || '{}') || {}; } catch { raw = {}; }
+
+  // Decide migration from what was actually STORED. Testing the merged object would
+  // always find the default job and quietly discard the user's real rates.
+  const hadJobs = Array.isArray(raw.jobs) && raw.jobs.length > 0;
+  settings = { ...DEFAULT_SETTINGS, ...raw };
+
+  // Older versions had one global `bands` and no jobs. Fold that into a single job and
+  // name it after the place that appears most often in the shifts already saved.
+  if (!hadJobs) {
+    const tally = {};
+    shifts.forEach(s => { if (s.label) tally[s.label] = (tally[s.label] || 0) + 1; });
+    const common = Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0];
+    settings.jobs = [{
+      id: 'j1',
+      name: common || 'Job',
+      color: JOB_COLORS[0],
+      bands: (Array.isArray(raw.bands) && raw.bands.length ? raw.bands : DEFAULT_BANDS).map(b => ({ ...b }))
+    }];
+    // Once the job is named, a label that just repeats it is noise.
+    shifts.forEach(s => { if (s.label === common) s.label = ''; });
+  }
+  delete settings.bands;
+  delete settings.holidayRate;
+
+  let dirty = false;
+  shifts.forEach(s => {
+    if (!s.jobId) { s.jobId = settings.jobs[0].id; dirty = true; }
+    if (!s.updatedAt) { s.updatedAt = Date.now(); dirty = true; }
+    if ('holiday' in s) { delete s.holiday; dirty = true; }
+  });
+  if (dirty) localStorage.setItem('sh_shifts', JSON.stringify(shifts));
 }
 function save() {
   localStorage.setItem('sh_shifts', JSON.stringify(shifts));
@@ -506,15 +552,25 @@ function toDateStr(d) {
 function fromDateStr(s) { return new Date(s + 'T00:00:00'); }
 function addDays(s, n) { const d = fromDateStr(s); d.setDate(d.getDate() + n); return toDateStr(d); }
 function parseHM(s) { const [h, m] = s.split(':').map(Number); return h * 60 + m; }
-function fmtH(min) { return (min / 60).toFixed(1) + 'h'; }
 function yen(n) { return '¥' + Math.round(n).toLocaleString('en-US'); }
 
+/* ---------- jobs ---------- */
+function jobById(id) { return settings.jobs.find(j => j.id === id) || settings.jobs[0]; }
+function jobOf(s) { return jobById(s.jobId); }
+function regularRate(job) { return Math.min(...job.bands.map(b => +b.rate)); }
+function nightRate(job) { return Math.max(...job.bands.map(b => +b.rate)); }
+function newJobId() { return 'j' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
+function multiJob() { return settings.jobs.length > 1; }
+
 /* ---------- shift math ---------- */
-// End at or before start means the shift runs past midnight ("21:00–00:00" = 3h).
+// A shift is either timed (start + end) or hours-only (mins). Hours-only entries are
+// taken as hours already worked, so no break is deducted from them.
+function isTimed(s) { return s.mins == null; }
+
 function span(s) {
   const a = parseHM(s.start);
   let b = parseHM(s.end);
-  if (b <= a) b += DAY;
+  if (b <= a) b += DAY;   // "21:00–00:00" runs to midnight; "22:00–02:00" crosses it
   return { a, b, dur: b - a };
 }
 function autoBreakFor(dur) {
@@ -523,13 +579,17 @@ function autoBreakFor(dur) {
   return 0;
 }
 function breakOf(s) {
+  if (!isTimed(s)) return 0;
   if (s.brk != null && s.brk !== '') return Math.max(0, +s.brk);
   return settings.autoBreak ? autoBreakFor(span(s).dur) : 0;
 }
-function workedMin(s) { return Math.max(0, span(s).dur - breakOf(s)); }
+function workedMin(s) {
+  if (!isTimed(s)) return Math.max(0, +s.mins);
+  return Math.max(0, span(s).dur - breakOf(s));
+}
 
-function rateAt(minuteOfDay) {
-  for (const b of settings.bands) {
+function rateAt(minuteOfDay, job) {
+  for (const b of job.bands) {
     const bs = parseHM(b.start);
     const be = b.end === '24:00' ? DAY : parseHM(b.end);
     if (minuteOfDay >= bs && minuteOfDay < be) return +b.rate;
@@ -537,20 +597,22 @@ function rateAt(minuteOfDay) {
   return 0;
 }
 
-// Minutes bucketed by hourly rate, with the unpaid break removed proportionally
-// across whichever bands the shift actually spans.
+// Minutes bucketed by hourly rate. For timed shifts the unpaid break comes off
+// proportionally across whichever bands the shift spans.
 function payOf(s) {
-  const { a, b, dur } = span(s);
+  const job = jobOf(s);
   const worked = workedMin(s);
+
+  if (!isTimed(s)) {
+    const r = s.night ? nightRate(job) : regularRate(job);
+    return { buckets: { [r]: worked }, pay: r * worked / 60, worked, brk: 0, job };
+  }
+
+  const { a, b, dur } = span(s);
   const factor = dur > 0 ? worked / dur : 0;
   const buckets = {};
-
-  if (s.holiday && settings.holidayRate) {
-    buckets[settings.holidayRate] = worked;
-    return { buckets, pay: settings.holidayRate * worked / 60, worked, brk: breakOf(s) };
-  }
   for (let m = a; m < b; m++) {
-    const r = rateAt(m % DAY);
+    const r = rateAt(m % DAY, job);
     buckets[r] = (buckets[r] || 0) + 1;
   }
   let pay = 0;
@@ -558,28 +620,37 @@ function payOf(s) {
     buckets[r] *= factor;
     pay += (+r) * buckets[r] / 60;
   }
-  return { buckets, pay, worked, brk: breakOf(s) };
+  return { buckets, pay, worked, brk: breakOf(s), job };
+}
+
+// Minutes of a shift paid above this job's regular rate.
+function nightMinutesOf(s) {
+  const job = jobOf(s);
+  if (!isTimed(s)) return s.night ? workedMin(s) : 0;
+  const { a, b } = span(s);
+  const reg = regularRate(job);
+  let n = 0;
+  for (let m = a; m < b; m++) if (rateAt(m % DAY, job) > reg) n++;
+  return n;
 }
 
 /* ---------- the 28-hour rolling rule ---------- */
-// Hours are attributed to the date the shift starts on, even if it ends after midnight.
+// Hours land on the date the shift starts, even when it ends after midnight. Every job
+// counts toward the same limit — immigration does not care that you have two employers.
 function dayMapOf(list) {
   const m = {};
   list.forEach(s => { m[s.date] = (m[s.date] || 0) + workedMin(s); });
   return m;
 }
 function dayMap() { return dayMapOf(shifts); }
-// Total worked minutes in the 7 days beginning at `start`.
+
 function windowTotal(start, dm) {
   let t = 0;
   for (let i = 0; i < 7; i++) t += dm[addDays(start, i)] || 0;
   return t;
 }
-// The 7 days ending on `date` — "count back 7 days from here". This is the number
-// shown on every day cell.
-function back7(date, dm) {
-  return windowTotal(addDays(date, -6), dm);
-}
+// "Count back 7 days from here" — the number shown on every day cell.
+function back7(date, dm) { return windowTotal(addDays(date, -6), dm); }
 
 // Every 7-day window that contains `date` — there are 7 of them.
 function windowsContaining(date, dm) {
@@ -590,8 +661,6 @@ function windowsContaining(date, dm) {
   }
   return out;
 }
-// All violating windows across the whole dataset, merged so one long overrun
-// doesn't produce seven near-identical warnings.
 function violationsOf(list) {
   const dm = dayMapOf(list);
   const dates = Object.keys(dm).filter(d => dm[d] > 0).sort();
@@ -613,6 +682,15 @@ function monthView() {
   d.setMonth(d.getMonth() + monthOffset);
   return d;
 }
+function shortRange(a, b) {
+  const f = d => fromDateStr(d).toLocaleDateString('en', { month: 'short', day: 'numeric' });
+  return `${f(a)} – ${f(b)}`;
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+function changeMonth(dir) { monthOffset += dir; render(); }
+function sortKey(s) { return isTimed(s) ? s.start : '99:99'; }
 
 function render() {
   const dm = dayMap();
@@ -630,7 +708,7 @@ function render() {
   /* --- month grid --- */
   const first = new Date(year, month, 1);
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const lead = (first.getDay() + 6) % 7; // Monday-first
+  const lead = (first.getDay() + 6) % 7;   // Monday-first
   const grid = document.getElementById('month-grid');
   grid.innerHTML = '';
 
@@ -642,7 +720,7 @@ function render() {
   for (let day = 1; day <= daysInMonth; day++) {
     const ds = toDateStr(new Date(year, month, day));
     const mins = dm[ds] || 0;
-    const run = back7(ds, dm);          // the 7 days ending on this one
+    const run = back7(ds, dm);
 
     const c = document.createElement('div');
     let cls = 'cell';
@@ -655,32 +733,41 @@ function render() {
     const hrs = mins > 0 ? `<div class="dhrs">${(mins/60).toFixed(1)}</div>` : '';
     const runCls = run > limitMin ? 'run over' : run > limitMin * 0.9 ? 'run warn' : 'run';
     const runTxt = run > 0 ? `<div class="${runCls}">${(run/60).toFixed(1)}</div>` : '';
-    c.innerHTML = `<div class="dnum">${day}</div>${hrs}${runTxt}`;
+
+    let dots = '';
+    if (multiJob() && mins > 0) {
+      const ids = [...new Set(shifts.filter(s => s.date === ds).map(s => s.jobId))];
+      dots = `<div class="dots">${ids.map(id =>
+        `<i style="background:${jobById(id).color}"></i>`).join('')}</div>`;
+    }
+    c.innerHTML = `<div class="dnum">${day}</div>${hrs}${runTxt}${dots}`;
     c.onclick = () => openDay(ds);
     grid.appendChild(c);
   }
 
+  document.getElementById('legend').innerHTML =
+    `<span><i class="dot" style="background:#d5ddfc"></i>worked</span>
+     <span><i class="dot" style="background:#f6d5b0"></i>close to ${settings.limit}h</span>
+     <span><i class="dot" style="background:#f2c1bc"></i>over ${settings.limit}h</span>
+     <span style="margin-left:auto">small number = the 7 days ending that day</span>`;
+
   /* --- worst window across the visible month --- */
-  let worstTotal = 0, worstStart = null;
+  let worstTotal = 0, worstW = null;
   for (let day = 1; day <= daysInMonth; day++) {
     const ds = toDateStr(new Date(year, month, day));
     windowsContaining(ds, dm).forEach(w => {
-      if (w.total > worstTotal) { worstTotal = w.total; worstStart = w; }
+      if (w.total > worstTotal) { worstTotal = w.total; worstW = w; }
     });
   }
   const wEl = document.getElementById('stat-window');
-  const wSub = document.getElementById('stat-window-sub');
   const wMeter = document.getElementById('window-meter');
   wEl.textContent = (worstTotal / 60).toFixed(1) + 'h';
   const pct = Math.min(100, worstTotal / limitMin * 100);
-  let color = '#27ae60';
-  if (worstTotal > limitMin) color = '#e74c3c';
-  else if (pct > 90) color = '#e67e22';
   wEl.className = 'stat-big ' + (worstTotal > limitMin ? 'over' : pct > 90 ? 'warn' : 'ok');
   wMeter.style.width = pct + '%';
-  wMeter.style.background = color;
-  wSub.textContent = worstStart && worstTotal > 0
-    ? `of ${settings.limit}h · ${shortRange(worstStart.start, worstStart.end)}`
+  wMeter.style.background = worstTotal > limitMin ? '#e74c3c' : pct > 90 ? '#e67e22' : '#27ae60';
+  document.getElementById('stat-window-sub').textContent = worstW && worstTotal > 0
+    ? `of ${settings.limit}h · ${shortRange(worstW.start, worstW.end)}`
     : `limit ${settings.limit}h`;
 
   /* --- violations --- */
@@ -697,47 +784,60 @@ function render() {
     alertBox.style.display = 'none';
   }
 
-  /* --- month pay --- */
-  const monthShifts = shifts
-    .filter(s => { const d = fromDateStr(s.date); return d.getFullYear() === year && d.getMonth() === month; })
-    .sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
+  /* --- pay, grouped by job --- */
+  const monthShifts = shifts.filter(s => {
+    const d = fromDateStr(s.date);
+    return d.getFullYear() === year && d.getMonth() === month;
+  });
 
-  const totals = {};   // rate -> minutes
   let gross = 0, workedTotal = 0, breakTotal = 0;
+  const byJob = new Map();
   monthShifts.forEach(s => {
     const p = payOf(s);
-    for (const r in p.buckets) totals[r] = (totals[r] || 0) + p.buckets[r];
-    gross += p.pay;
-    workedTotal += p.worked;
-    breakTotal += p.brk;
+    if (!byJob.has(p.job.id)) byJob.set(p.job.id, { job: p.job, buckets: {}, pay: 0, worked: 0 });
+    const g = byJob.get(p.job.id);
+    for (const r in p.buckets) g.buckets[r] = (g.buckets[r] || 0) + p.buckets[r];
+    g.pay += p.pay; g.worked += p.worked;
+    gross += p.pay; workedTotal += p.worked; breakTotal += p.brk;
   });
 
   document.getElementById('stat-pay').textContent = yen(gross);
   document.getElementById('stat-hours').textContent = (workedTotal / 60).toFixed(1) + 'h worked';
 
   const payRows = document.getElementById('pay-rows');
-  const rates = Object.keys(totals).map(Number).sort((a, b) => a - b);
-  if (!rates.length) {
+  if (!byJob.size) {
     payRows.innerHTML = '<div class="empty">No shifts this month.</div>';
   } else {
-    payRows.innerHTML = rates.map(r => {
-      const mins = totals[r];
-      return `<div class="row">
-        <span class="rlabel">${rateLabel(r)} <span class="rhrs">${(mins/60).toFixed(1)}h × ¥${r}</span></span>
-        <span class="rval">${yen(r * mins / 60)}</span>
-      </div>`;
-    }).join('') +
-    (breakTotal > 0 ? `<div class="row deduct">
+    let html = '';
+    byJob.forEach(g => {
+      const reg = regularRate(g.job);
+      if (multiJob()) {
+        html += `<div class="job-head">
+          <span class="jn"><i class="jd" style="background:${g.job.color}"></i>${escapeHtml(g.job.name)}
+            <span style="color:#bbb;font-weight:400">${(g.worked/60).toFixed(1)}h</span></span>
+          <span>${yen(g.pay)}</span></div>`;
+      }
+      Object.keys(g.buckets).map(Number).sort((a, b) => a - b).forEach(r => {
+        const mins = g.buckets[r];
+        html += `<div class="row${multiJob() ? ' sub' : ''}">
+          <span class="rlabel">${r === reg ? 'Regular' : 'Night'}
+            <span class="rhrs">${(mins/60).toFixed(1)}h × ¥${r}</span></span>
+          <span class="rval">${yen(r * mins / 60)}</span></div>`;
+      });
+    });
+    if (breakTotal > 0) {
+      html += `<div class="row deduct">
         <span class="rlabel">Unpaid break <span class="rhrs">${(breakTotal/60).toFixed(1)}h</span></span>
-        <span class="rval">deducted</span>
-      </div>` : '') +
-    `<div class="row total"><span class="rlabel">Gross</span><span class="rval">${yen(gross)}</span></div>`;
+        <span class="rval">deducted</span></div>`;
+    }
+    html += `<div class="row total"><span class="rlabel">Gross</span><span class="rval">${yen(gross)}</span></div>`;
+    payRows.innerHTML = html;
   }
 
-  /* --- what's coming up, from today onward, across months --- */
+  /* --- upcoming, today onward, across months --- */
   const upcoming = shifts
     .filter(s => s.date >= today)
-    .sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
+    .sort((a, b) => a.date.localeCompare(b.date) || sortKey(a).localeCompare(sortKey(b)));
 
   const list = document.getElementById('shift-list');
   document.getElementById('shift-count').textContent = upcoming.length ? `· ${upcoming.length}` : '';
@@ -747,68 +847,52 @@ function render() {
     list.innerHTML = upcoming.map(s => {
       const d = fromDateStr(s.date);
       const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
-      const crosses = parseHM(s.end) <= parseHM(s.start);
-      const nightMin = nightMinutesOf(s);
       const isToday = s.date === today;
+      const job = jobOf(s);
+      const timeTxt = isTimed(s)
+        ? `${s.start}–${s.end}${parseHM(s.end) <= parseHM(s.start) ? '⁺' : ''}`
+        : '<span style="color:#ccc">no times</span>';
+      const tags =
+        (nightMinutesOf(s) > 0 ? '<span class="tag night">night</span>' : '') +
+        (multiJob() ? `<span class="tag job" style="background:${job.color}">${escapeHtml(job.name)}</span>` : '');
       return `<div class="shift-item${isToday ? ' is-today' : ''}" onclick="openDay('${s.date}')">
         <span class="sdate">${isToday ? 'Today' : `${d.getDate()} ${dow}`}</span>
-        <span class="stime">${s.start}–${s.end}${crosses ? '⁺' : ''}</span>
+        <span class="stime">${timeTxt}</span>
         <span class="shrs">${(workedMin(s)/60).toFixed(1)}h</span>
-        <span class="slabel"><span class="ltxt">${escapeHtml(s.label || '')}</span>${nightMin > 0 ? '<span class="tag night">night</span>' : ''}${s.holiday ? '<span class="tag holi">holiday</span>' : ''}</span>
+        <span class="slabel"><span class="ltxt">${escapeHtml(s.label || '')}</span>${tags}</span>
       </div>`;
     }).join('');
   }
 }
 
-function rateLabel(r) {
-  const band = settings.bands.find(b => +b.rate === r);
-  if (settings.holidayRate && r === +settings.holidayRate) return 'Holiday';
-  const all = settings.bands.filter(b => +b.rate === r);
-  if (!all.length) return `¥${r}`;
-  const isNight = all.every(b => {
-    const s = parseHM(b.start), e = b.end === '24:00' ? DAY : parseHM(b.end);
-    return s >= 22 * 60 || e <= 5 * 60 || (s >= 0 && e <= 6 * 60);
-  });
-  const lowest = Math.min(...settings.bands.map(b => +b.rate));
-  if (r === lowest) return 'Regular';
-  return isNight ? 'Night' : `¥${r} band`;
-}
-
-// Minutes of this shift falling in a band that is not the cheapest one.
-function nightMinutesOf(s) {
-  const { a, b } = span(s);
-  const lowest = Math.min(...settings.bands.map(x => +x.rate));
-  let n = 0;
-  for (let m = a; m < b; m++) if (rateAt(m % DAY) > lowest) n++;
-  return n;
-}
-
 /* ---------- drawing a shift on a time axis ---------- */
-// The axis runs 06:00 → 02:00 next day, which covers every realistic バイト shift.
-const AX_A = 6 * 60, AX_B = 26 * 60;
+const AX_A = 6 * 60, AX_B = 26 * 60;   // 06:00 → 02:00 covers every realistic shift
 const pctOf = m => Math.max(0, Math.min(100, (m - AX_A) / (AX_B - AX_A) * 100));
 
-// Consecutive minutes on the same rate, collapsed into blocks — this is what makes
-// "18:00–24:00 is 4h regular then 2h night" something you can see rather than infer.
 function segmentsOf(s) {
+  const job = jobOf(s);
   const { a, b } = span(s);
-  const lowest = Math.min(...settings.bands.map(x => +x.rate));
+  const reg = regularRate(job);
   const segs = [];
   let cur = null;
   for (let m = a; m < b; m++) {
-    const r = (s.holiday && settings.holidayRate) ? +settings.holidayRate : rateAt(m % DAY);
+    const r = rateAt(m % DAY, job);
     if (!cur || cur.rate !== r) { cur = { from: m, to: m + 1, rate: r }; segs.push(cur); }
     else cur.to = m + 1;
   }
-  return segs.map(g => ({ ...g, night: g.rate > lowest }));
+  return segs.map(g => ({ ...g, night: g.rate > reg }));
 }
 
 function trackHtml(s) {
-  const ticks = [10, 14, 18, 22].map(h =>
-    `<div class="tick" style="left:${pctOf(h * 60)}%"></div>`).join('');
+  const job = jobOf(s);
+  if (!isTimed(s)) {
+    return `<div class="noclock" style="background:${job.color};${s.night ? 'filter:brightness(0.68)' : ''}">
+      ${(workedMin(s)/60).toFixed(1)}h — no times recorded</div>`;
+  }
+  const ticks = [10, 14, 18, 22].map(h => `<div class="tick" style="left:${pctOf(h*60)}%"></div>`).join('');
   const segs = segmentsOf(s).map(g => {
     const l = pctOf(g.from), r = pctOf(g.to);
-    return `<div class="seg ${g.night ? 'nig' : 'reg'}" style="left:${l}%;width:${Math.max(r - l, 1)}%"></div>`;
+    return `<div class="seg${g.night ? ' nig' : ''}" style="background:${job.color};left:${l}%;width:${Math.max(r-l,1)}%"></div>`;
   }).join('');
   return `<div class="track">${ticks}${segs}</div>`;
 }
@@ -816,15 +900,13 @@ function trackHtml(s) {
 function openDay(ds) {
   const d = fromDateStr(ds);
   const dm = dayMap();
-  const mine = shifts.filter(s => s.date === ds)
-    .sort((a, b) => a.start.localeCompare(b.start));
+  const mine = shifts.filter(s => s.date === ds).sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
 
   document.getElementById('day-title').textContent =
     d.toLocaleDateString('en', { weekday: 'long', month: 'short', day: 'numeric' });
   document.getElementById('day-add').onclick = () => { closeModal('day-modal'); openAddModal(ds); };
 
   const body = document.getElementById('day-body');
-
   if (!mine.length) {
     body.innerHTML = `<div class="empty" style="padding:6px 0 12px">Nothing scheduled.</div>` + windowVerdict(ds, dm);
     document.getElementById('day-modal').classList.add('open');
@@ -835,16 +917,27 @@ function openDay(ds) {
   const rows = mine.map(s => {
     const p = payOf(s);
     total += p.worked; pay += p.pay;
-    const night = segmentsOf(s).filter(g => g.night).reduce((n, g) => n + (g.to - g.from), 0);
-    const bits = [`${(p.worked / 60).toFixed(1)}h`];
-    if (night > 0) bits.push(`${(night / 60).toFixed(1)}h night`);
+    const night = nightMinutesOf(s);
+
+    const bits = [`${(p.worked/60).toFixed(1)}h`];
+    if (night > 0 && isTimed(s)) bits.push(`${(night/60).toFixed(1)}h night`);
+    else if (night > 0) bits.push('night rate');
     if (p.brk > 0) bits.push(`−${p.brk}m break`);
+
+    const head = isTimed(s) ? `${s.start}–${s.end}` : `${(p.worked/60).toFixed(1)} hours`;
+    const jobTag = multiJob()
+      ? `<span class="tag job" style="background:${p.job.color}">${escapeHtml(p.job.name)}</span>` : '';
+    const axis = isTimed(s)
+      ? `<div class="axis"><span>6:00</span><span>10:00</span><span>14:00</span><span>18:00</span><span>22:00</span><span>2:00</span></div>`
+      : '';
+
     return `<div class="tl-row">
       <div class="tl-head">
-        <span class="t">${s.start}–${s.end} <span style="color:#999;font-weight:400">${escapeHtml(s.label || '')}</span></span>
+        <span class="t">${head} ${jobTag}
+          <span style="color:#999;font-weight:400">${escapeHtml(s.label || '')}</span></span>
         <span class="r">${yen(p.pay)}</span>
       </div>
-      <div class="axis"><span>6:00</span><span>10:00</span><span>14:00</span><span>18:00</span><span>22:00</span><span>2:00</span></div>
+      ${axis}
       ${trackHtml(s)}
       <div class="tl-foot">
         <span class="r">${bits.join(' · ')}</span>
@@ -855,12 +948,11 @@ function openDay(ds) {
   }).join('');
 
   body.innerHTML = rows +
-    `<div class="row total"><span class="rlabel">${(total / 60).toFixed(1)}h worked</span><span class="rval">${yen(pay)}</span></div>` +
+    `<div class="row total"><span class="rlabel">${(total/60).toFixed(1)}h worked</span><span class="rval">${yen(pay)}</span></div>` +
     windowVerdict(ds, dm);
   document.getElementById('day-modal').classList.add('open');
 }
 
-// Same tap-again-to-confirm as the edit sheet, so a mis-tap on a phone never destroys a shift.
 let dayDelTimer = null;
 function deleteFromDay(btn, id, ds) {
   if (!btn.classList.contains('confirming')) {
@@ -879,11 +971,10 @@ function deleteFromDay(btn, id, ds) {
   remember(id);
   shifts = shifts.filter(x => x.id !== id);
   save(); render(); pushSoon();
-  openDay(ds);   // stay on the day so you can keep working on it
+  openDay(ds);
 }
 
-// Leads with the same number the day cell shows — the 7 days ending here — then flags
-// any other stretch through this day that is over, so nothing hides behind the headline.
+// Leads with the same number the day cell shows — the 7 days ending here.
 function windowVerdict(ds, dm) {
   const limitMin = settings.limit * 60;
   const run = back7(ds, dm);
@@ -896,31 +987,31 @@ function windowVerdict(ds, dm) {
       The 7 days ending here (${range}) add up to <b>${hrs}h</b> —
       ${((run - limitMin) / 60).toFixed(1)}h over ${settings.limit}h.</div>`;
   }
-
   let html = `<p class="hint" style="margin-top:10px">
     The 7 days ending here (${range}) = <b>${hrs}h</b> of ${settings.limit}h. Within the limit.</p>`;
 
-  // A day can be clean looking backward and still sit inside a stretch that breaks later.
   const other = windowsContaining(ds, dm).filter(w => w.total > limitMin);
   if (other.length) {
     const w = other.reduce((a, b) => b.total > a.total ? b : a);
     html += `<div class="alert" style="margin-top:8px">But this day falls inside
-      ${shortRange(w.start, w.end)}, which reaches <b>${(w.total / 60).toFixed(1)}h</b> —
+      ${shortRange(w.start, w.end)}, which reaches <b>${(w.total/60).toFixed(1)}h</b> —
       over ${settings.limit}h.</div>`;
   }
   return html;
 }
 
-function shortRange(a, b) {
-  const f = d => fromDateStr(d).toLocaleDateString('en', { month: 'short', day: 'numeric' });
-  return `${f(a)} – ${f(b)}`;
-}
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-}
-function changeMonth(dir) { monthOffset += dir; render(); }
-
 /* ---------- add / edit ---------- */
+function fillJobSelect(id, selected) {
+  document.getElementById(id).innerHTML = settings.jobs.map(j =>
+    `<option value="${j.id}" ${j.id === selected ? 'selected' : ''}>${escapeHtml(j.name)}</option>`).join('');
+}
+function setMode(m) {
+  addMode = m;
+  document.getElementById('mode-times').classList.toggle('on', m === 'times');
+  document.getElementById('mode-hours').classList.toggle('on', m === 'hours');
+  document.getElementById('times-fields').style.display = m === 'times' ? 'block' : 'none';
+  document.getElementById('hours-fields').style.display = m === 'hours' ? 'block' : 'none';
+}
 function updateBreakHint() {
   const st = document.getElementById('input-start').value;
   const en = document.getElementById('input-end').value;
@@ -932,6 +1023,10 @@ function updateBreakHint() {
   const auto = settings.autoBreak ? autoBreakFor(dur) : 0;
   hint.textContent = `${(dur/60).toFixed(1)}h shift → auto ${auto} min`;
 }
+function lastJobId() {
+  const s = [...shifts].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+  return s ? s.jobId : settings.jobs[0].id;
+}
 
 function openAddModal(dateStr) {
   editingId = null;
@@ -940,15 +1035,15 @@ function openAddModal(dateStr) {
   document.getElementById('input-date').value = dateStr || toDateStr(new Date());
   document.getElementById('input-start').value = '';
   document.getElementById('input-end').value = '';
-  document.getElementById('input-label').value = lastLabel();
+  document.getElementById('input-hours').value = '';
+  document.getElementById('input-night').checked = false;
+  document.getElementById('input-label').value = '';
   document.getElementById('input-break').value = '';
-  document.getElementById('input-holiday').checked = false;
+  document.getElementById('job-group').style.display = multiJob() ? 'block' : 'none';
+  fillJobSelect('input-job', lastJobId());
+  setMode(addMode);
   updateBreakHint();
   document.getElementById('add-modal').classList.add('open');
-}
-function lastLabel() {
-  const s = [...shifts].sort((a, b) => b.date.localeCompare(a.date))[0];
-  return s ? (s.label || '') : '';
 }
 function editShift(id) {
   const s = shifts.find(x => x.id === id); if (!s) return;
@@ -956,27 +1051,48 @@ function editShift(id) {
   document.getElementById('modal-title').textContent = 'Edit Shift';
   document.getElementById('delete-btn').style.display = 'block';
   document.getElementById('input-date').value = s.date;
-  document.getElementById('input-start').value = s.start;
-  document.getElementById('input-end').value = s.end;
+  document.getElementById('input-start').value = s.start || '';
+  document.getElementById('input-end').value = s.end || '';
+  document.getElementById('input-hours').value = isTimed(s) ? '' : (s.mins / 60);
+  document.getElementById('input-night').checked = !!s.night;
   document.getElementById('input-label').value = s.label || '';
   document.getElementById('input-break').value = (s.brk != null && s.brk !== '') ? s.brk : '';
-  document.getElementById('input-holiday').checked = !!s.holiday;
+  document.getElementById('job-group').style.display = multiJob() ? 'block' : 'none';
+  fillJobSelect('input-job', s.jobId);
+  setMode(isTimed(s) ? 'times' : 'hours');
   updateBreakHint();
   document.getElementById('add-modal').classList.add('open');
 }
 
 function saveShift() {
-  const brkRaw = document.getElementById('input-break').value.trim();
-  const data = {
-    date: document.getElementById('input-date').value,
-    start: document.getElementById('input-start').value,
-    end: document.getElementById('input-end').value,
-    label: document.getElementById('input-label').value.trim(),
-    brk: brkRaw === '' ? null : Math.max(0, +brkRaw),
-    holiday: document.getElementById('input-holiday').checked
-  };
-  if (!data.date || !data.start || !data.end) return alert('Fill in date, start and end.');
-  if (data.start === data.end) return alert('Start and end are the same.');
+  const date = document.getElementById('input-date').value;
+  if (!date) return alert('Pick a date.');
+  const jobId = document.getElementById('input-job').value || settings.jobs[0].id;
+  const label = document.getElementById('input-label').value.trim();
+
+  let data;
+  if (addMode === 'hours') {
+    const h = parseFloat(document.getElementById('input-hours').value);
+    if (!(h > 0)) return alert('Enter how many hours you worked.');
+    if (h > 24) return alert('That is more than a day.');
+    data = {
+      date, jobId, label,
+      mins: Math.round(h * 60),
+      night: document.getElementById('input-night').checked,
+      start: null, end: null, brk: null
+    };
+  } else {
+    const start = document.getElementById('input-start').value;
+    const end = document.getElementById('input-end').value;
+    if (!start || !end) return alert('Fill in start and end, or switch to "Just hours".');
+    if (start === end) return alert('Start and end are the same.');
+    const brkRaw = document.getElementById('input-break').value.trim();
+    data = {
+      date, jobId, label, start, end,
+      brk: brkRaw === '' ? null : Math.max(0, +brkRaw),
+      mins: null, night: false
+    };
+  }
 
   if (editingId) {
     const i = shifts.findIndex(x => x.id === editingId);
@@ -985,16 +1101,15 @@ function saveShift() {
     shifts.push(stamp({ ...data, id: newId() }));
   }
   save(); closeModal('add-modal'); render(); pushSoon();
-  warnIfOver(data.date);
+  warnIfOver(date);
 }
 
-// Tell him straight away if the shift he just saved broke the rule.
 function warnIfOver(date) {
   const dm = dayMap();
   const limitMin = settings.limit * 60;
-  const worst = windowsContaining(date, dm).filter(w => w.total > limitMin);
-  if (worst.length) {
-    const w = worst.reduce((a, b) => b.total > a.total ? b : a);
+  const over = windowsContaining(date, dm).filter(w => w.total > limitMin);
+  if (over.length) {
+    const w = over.reduce((a, b) => b.total > a.total ? b : a);
     alert(`⚠️ This puts you at ${(w.total/60).toFixed(1)}h in the 7 days ${shortRange(w.start, w.end)} — over the ${settings.limit}h limit.`);
   }
 }
@@ -1021,56 +1136,111 @@ function closeModal(id) {
   if (btn) { btn.classList.remove('confirming'); btn.textContent = 'Delete'; clearTimeout(deleteTimer); }
 }
 
-/* ---------- parsing shift text ---------- */
-// Handles "▢2026/07/23 (木) 13:00〜18:00 豊橋野依インター", several per line or one
-// per line, with or without the year, and 〜 ~ ～ - – — as the separator.
-function parseShiftText(text) {
-  // Dates and times are scanned separately, then each time range takes the last date
-  // that appeared before it. Work often sends two shifts under one date —
-  //   "7/17 (金) 11:00〜14:00 店 16:00〜19:00 店"
-  // — and a parser that demands a date in front of every time silently drops the
-  // second one. Bullets are ignored entirely (▢ □ ☐ ・ …, plus whatever OCR invents).
+/* ---------- reading shifts from text ---------- */
+// Two shapes, decided per line:
+//   full    ▢2026/07/23 (木) 13:00〜18:00 豊橋野依インター
+//   quick   18 -> 3       18: 3 familymart, 4 lamu       22 = 5n
+// A quick line is day-of-the-viewed-month plus hours — the fast way to log a month you
+// have already worked. A job name after the hours picks that job.
+const TIME_RANGE = /(\d{1,2})\s*[:：]\s*(\d{2})\s*[〜~～\-–—ー]\s*(\d{1,2})\s*[:：]\s*(\d{2})/;
+
+function matchJob(text, fallbackId) {
+  const t = (text || '').trim().toLowerCase().replace(/\s+/g, '');
+  if (!t) return { jobId: fallbackId, rest: '' };
+  for (const j of settings.jobs) {
+    const n = (j.name || '').toLowerCase().replace(/\s+/g, '');
+    if (n && (t === n || t.startsWith(n) || n.startsWith(t))) return { jobId: j.id, rest: '' };
+  }
+  return { jobId: fallbackId, rest: (text || '').trim() };
+}
+
+function parseShiftText(text, defaultJobId, view) {
+  const jobId0 = defaultJobId || settings.jobs[0].id;
+  const base = view || monthView();
+  const out = [], seen = new Set();
+
+  text.split(/[\n\r]+/).forEach(line => {
+    if (!line.trim()) return;
+    if (TIME_RANGE.test(line)) out.push(...parseTimed(line, jobId0));
+    else out.push(...parseQuick(line, jobId0, base));
+  });
+
+  return out.filter(s => {
+    const k = `${s.date}|${s.jobId}|${isTimed(s) ? s.start + s.end : 'h' + s.mins}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+// Dates and times are scanned separately, so two shifts under one date both survive.
+function parseTimed(line, jobId0) {
   const dateRe = /(?:(\d{4})\s*[\/\-.年]\s*)?(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})\s*日?/g;
-  const timeRe = /(\d{1,2})\s*[:：]\s*(\d{2})\s*[〜~～\-–—ー]\s*(\d{1,2})\s*[:：]\s*(\d{2})/g;
+  const timeRe = new RegExp(TIME_RANGE.source, 'g');
   const thisYear = new Date().getFullYear();
   const pad = n => String(n).padStart(2, '0');
 
-  const dates = [...text.matchAll(dateRe)]
+  const dates = [...line.matchAll(dateRe)]
     .filter(m => +m[2] >= 1 && +m[2] <= 12 && +m[3] >= 1 && +m[3] <= 31)
     .map(m => ({ at: m.index, date: `${m[1] ? +m[1] : thisYear}-${pad(+m[2])}-${pad(+m[3])}` }));
-
-  const times = [...text.matchAll(timeRe)]
+  const times = [...line.matchAll(timeRe)]
     .filter(m => +m[1] <= 23 && +m[3] <= 24 && +m[2] <= 59 && +m[4] <= 59);
 
-  const out = [], seen = new Set();
-
+  const out = [];
   times.forEach((m, i) => {
-    // The date this shift belongs to: the nearest one written before it.
     const owner = [...dates].reverse().find(d => d.at < m.index);
-    if (!owner) return;   // a time with no date in front of it anywhere — not a shift
+    if (!owner) return;
 
-    // The label runs until the next time range or the next date, whichever comes first.
     const from = m.index + m[0].length;
     const nextTime = times[i + 1] ? times[i + 1].index : Infinity;
     const nextDate = dates.find(d => d.at >= from);
-    const to = Math.min(nextTime, nextDate ? nextDate.at : Infinity, text.length);
+    const to = Math.min(nextTime, nextDate ? nextDate.at : Infinity, line.length);
 
-    const label = text.slice(from, to)
-      .split(/[\n\r]/)[0]                       // a label never runs onto the next line
-      .replace(/^[\s　:：\-–—]+/, '')            // leftovers from the time itself
-      .replace(/[\s　□■▢▫▪◻◼☐☑☒・･,、]+$/, '')  // the next entry's bullet
+    const tail = line.slice(from, to)
+      .replace(/^[\s　:：\-–—]+/, '')
+      .replace(/[\s　□■▢▫▪◻◼☐☑☒・･,、]+$/, '')
       .trim();
+    const { jobId, rest } = matchJob(tail, jobId0);
 
-    const shift = {
-      date: owner.date,
-      start: `${pad(+m[1])}:${m[2]}`,
-      end: `${pad(+m[3] % 24)}:${m[4]}`,
-      label, holiday: false, brk: null
-    };
-    const key = `${shift.date} ${shift.start} ${shift.end}`;
-    if (seen.has(key)) return;   // the same shift listed twice in one message
-    seen.add(key);
-    out.push(shift);
+    out.push({
+      date: owner.date, jobId,
+      start: `${pad(+m[1])}:${m[2]}`, end: `${pad(+m[3] % 24)}:${m[4]}`,
+      mins: null, night: false, brk: null, label: rest
+    });
+  });
+  return out;
+}
+
+// "18 -> 3 familymart, 4 lamu"   /   "19 4"   /   "7/22 = 5n"
+function parseQuick(line, jobId0, base) {
+  const head = line.match(/^\s*(?:(\d{1,2})\s*[\/\-.月]\s*)?(\d{1,2})\s*日?\s*(?:->|=>|[:：=＝>＞])?\s*(.+)$/);
+  if (!head) return [];
+  const [, moRaw, dayRaw, tail] = head;
+
+  const month = moRaw ? +moRaw - 1 : base.getMonth();
+  const year = base.getFullYear();
+  const day = +dayRaw;
+  if (month < 0 || month > 11 || day < 1 || day > 31) return [];
+  const probe = new Date(year, month, day);
+  if (probe.getMonth() !== month || probe.getDate() !== day) return [];   // e.g. Feb 31
+  const date = toDateStr(probe);
+
+  const out = [];
+  tail.split(/[,、，]/).forEach(part => {
+    // Alternatives longest-first: with /h|hrs/ the "h" of "hours" wins and leaves "ours"
+    // behind as the job name.
+    const m = part.match(/^\s*(\d+(?:[.．]\d+)?)\s*(?:hours|hour|hrs|hr|h|時間)?\s*(night|深夜|n)?\s*(?:at\s+|@\s*)?(.*)$/i);
+    if (!m) return;
+    const hours = parseFloat(m[1].replace('．', '.'));
+    if (!(hours > 0) || hours > 24) return;
+    const { jobId, rest } = matchJob(m[3], jobId0);
+    out.push({
+      date, jobId,
+      start: null, end: null,
+      mins: Math.round(hours * 60),
+      night: !!m[2],
+      brk: null, label: rest
+    });
   });
   return out;
 }
@@ -1081,19 +1251,28 @@ function openPasteModal() {
   document.getElementById('paste-results').style.display = 'none';
   document.getElementById('paste-add-row').style.display = 'none';
   document.getElementById('paste-verdict').innerHTML = '';
+  document.getElementById('paste-job-group').style.display = multiJob() ? 'block' : 'none';
+  fillJobSelect('paste-job', lastJobId());
+  const mv = monthView().toLocaleDateString('en', { month: 'long' });
+  document.getElementById('paste-help').innerHTML =
+    `Type quickly — <b>18 -> 3</b> means 3 hours on the 18th of ${escapeHtml(mv)}. ` +
+    `Two jobs in a day: <b>18: 3 familymart, 4 lamu</b>. Put <b>n</b> after the hours for the night rate. ` +
+    `Or just paste the message from work, times and all.`;
   document.getElementById('paste-modal').classList.add('open');
 }
 function doParsePaste() {
-  const text = document.getElementById('paste-text').value;
-  renderExtracted('paste', parseShiftText(text));
+  const jobId = multiJob() ? document.getElementById('paste-job').value : settings.jobs[0].id;
+  renderExtracted('paste', parseShiftText(document.getElementById('paste-text').value, jobId));
 }
 
 function openUploadModal() {
   document.getElementById('ocr-status').innerHTML = '';
   document.getElementById('ocr-results').style.display = 'none';
   document.getElementById('ocr-add-btn').style.display = 'none';
-  document.getElementById('file-input').value = '';
   document.getElementById('ocr-verdict').innerHTML = '';
+  document.getElementById('file-input').value = '';
+  document.getElementById('ocr-job-group').style.display = multiJob() ? 'block' : 'none';
+  fillJobSelect('ocr-job', lastJobId());
   document.getElementById('upload-modal').classList.add('open');
 }
 async function handleUpload(e) {
@@ -1107,10 +1286,17 @@ async function handleUpload(e) {
           status.innerHTML = `<p class="hint">Reading… ${Math.round(m.progress * 100)}%</p>`;
       }
     });
-    renderExtracted('ocr', parseShiftText(text));
+    const jobId = multiJob() ? document.getElementById('ocr-job').value : settings.jobs[0].id;
+    renderExtracted('ocr', parseShiftText(text, jobId));
   } catch {
     status.innerHTML = '<p class="hint" style="color:#e74c3c">Could not read that image.</p>';
   }
+}
+
+function sameShift(a, b) {
+  if (a.date !== b.date || a.jobId !== b.jobId) return false;
+  if (isTimed(a) !== isTimed(b)) return false;
+  return isTimed(a) ? (a.start === b.start && a.end === b.end) : (+a.mins === +b.mins);
 }
 
 function renderExtracted(kind, found) {
@@ -1119,23 +1305,26 @@ function renderExtracted(kind, found) {
   const addBtn = kind === 'ocr'
     ? document.getElementById('ocr-add-btn')
     : document.getElementById('paste-add-row');
+  const verdict = document.getElementById(kind === 'ocr' ? 'ocr-verdict' : 'paste-verdict');
 
   if (!found.length) {
-    status.innerHTML = '<p class="hint" style="color:#e74c3c">No shifts found. Expected something like 2026/07/23 13:00〜18:00.</p>';
-    box.style.display = 'none';
-    addBtn.style.display = 'none';
+    status.innerHTML = '<p class="hint" style="color:#e74c3c">Nothing recognised. Try <b>18 -> 3</b>, or paste the message from work.</p>';
+    box.style.display = 'none'; addBtn.style.display = 'none'; verdict.innerHTML = '';
     return;
   }
   pending[kind] = found;
   status.innerHTML = `<p class="hint">Found ${found.length} shift${found.length>1?'s':''}:</p>`;
   box.style.display = 'block';
   box.innerHTML = found.map((s, i) => {
-    const dup = shifts.some(x => x.date === s.date && x.start === s.start && x.end === s.end);
-    const hrs = (workedMin(s) / 60).toFixed(1);
+    const dup = shifts.some(x => sameShift(x, s));
+    const when = isTimed(s) ? `${s.start}–${s.end}` : `${(s.mins/60).toFixed(1)}h`;
+    const job = jobById(s.jobId);
     return `<div class="extracted-item">
       <input type="checkbox" id="${kind}-chk-${i}" ${dup ? '' : 'checked'} onchange="previewCheck('${kind}')">
-      <span>${s.date} ${s.start}–${s.end} <b>${hrs}h</b>
-        <span style="color:#999">${escapeHtml(s.label)}</span>
+      <span>${s.date} ${when} <b>${(workedMin(s)/60).toFixed(1)}h</b>
+        ${s.night ? '<span class="tag night">night</span>' : ''}
+        ${multiJob() ? `<span class="tag job" style="background:${job.color}">${escapeHtml(job.name)}</span>` : ''}
+        <span style="color:#999">${escapeHtml(s.label || '')}</span>
         ${dup ? '<span class="tag">already added</span>' : ''}</span>
     </div>`;
   }).join('');
@@ -1143,16 +1332,15 @@ function renderExtracted(kind, found) {
   previewCheck(kind);
 }
 
-// The question that matters before committing: if I accept these, am I over 28h?
-// Answered against the shifts already saved plus the ones currently ticked.
+// The question that matters before committing: if I accept these, am I over the limit?
 function previewCheck(kind) {
   const found = pending[kind] || [];
   const picked = found.filter((_, i) => document.getElementById(`${kind}-chk-${i}`)?.checked);
-  const bad = violationsOf(shifts.concat(picked));
   const el = document.getElementById(kind === 'ocr' ? 'ocr-verdict' : 'paste-verdict');
   const limitMin = settings.limit * 60;
 
   if (!picked.length) { el.innerHTML = ''; return; }
+  const bad = violationsOf(shifts.concat(picked));
   if (!bad.length) {
     const total = picked.reduce((n, s) => n + workedMin(s), 0);
     el.innerHTML = `<div class="verdict ok">✓ Adding these ${picked.length} shift${picked.length>1?'s':''}
@@ -1186,9 +1374,6 @@ function addExtracted(kind) {
 }
 
 /* ---------- calendar export ---------- */
-// iOS cannot schedule a notification from a web app, so the alarm is handed to the
-// system calendar as a VALARM instead. Times are written as floating local time,
-// which is what you want as long as the phone is in the same timezone you work in.
 function icsStamp(dateStr, hm, extraDays) {
   const d = fromDateStr(dateStr);
   d.setDate(d.getDate() + (extraDays || 0));
@@ -1199,7 +1384,6 @@ function icsStamp(dateStr, hm, extraDays) {
 function icsEscape(s) {
   return String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
 }
-// RFC 5545 caps a line at 75 octets; fold on byte length so Japanese labels survive.
 function icsFold(line) {
   const enc = new TextEncoder();
   if (enc.encode(line).length <= 73) return line;
@@ -1213,12 +1397,11 @@ function icsFold(line) {
   if (cur.trim()) out.push(cur);
   return out.join('\r\n');
 }
-
 function icsScopeShifts() {
   const scope = document.getElementById('ics-scope').value;
   const today = toDateStr(new Date());
   const view = monthView();
-  let list = [...shifts];
+  let list = shifts.filter(isTimed);   // an alarm needs a time to fire before
   if (scope === 'future') list = list.filter(s => s.date >= today);
   else if (scope === 'month') list = list.filter(s => {
     const d = fromDateStr(s.date);
@@ -1228,42 +1411,37 @@ function icsScopeShifts() {
 }
 function updateIcsCount() {
   const n = icsScopeShifts().length;
-  document.getElementById('ics-count').textContent =
-    n ? `${n} shift${n>1?'s':''} will be exported.` : 'No shifts in that range.';
+  const skipped = shifts.filter(s => !isTimed(s)).length;
+  document.getElementById('ics-count').innerHTML =
+    (n ? `${n} shift${n>1?'s':''} will be exported.` : 'No shifts with times in that range.') +
+    (skipped ? ` <span style="color:#e67e22">${skipped} hours-only shift${skipped>1?'s':''} skipped — an alarm needs a start time.</span>` : '');
 }
-
 function buildIcs(list, leads) {
-  // Bump the sequence on every export so re-importing overwrites rather than duplicates.
   const seq = (+(localStorage.getItem('sh_icsseq') || 0)) + 1;
   localStorage.setItem('sh_icsseq', seq);
-
   const now = new Date();
   const p = n => String(n).padStart(2, '0');
-  const stamp = `${now.getUTCFullYear()}${p(now.getUTCMonth()+1)}${p(now.getUTCDate())}T${p(now.getUTCHours())}${p(now.getUTCMinutes())}${p(now.getUTCSeconds())}Z`;
+  const st = `${now.getUTCFullYear()}${p(now.getUTCMonth()+1)}${p(now.getUTCDate())}T${p(now.getUTCHours())}${p(now.getUTCMinutes())}${p(now.getUTCSeconds())}Z`;
 
-  const lines = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//shift-hours//EN',
-    'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:Shifts'
-  ];
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//shift-hours//EN',
+                 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:Shifts'];
   list.forEach(s => {
+    const job = jobOf(s);
     const crosses = parseHM(s.end) <= parseHM(s.start);
-    const title = s.label ? `バイト — ${s.label}` : 'バイト';
     const p2 = payOf(s);
     lines.push(
       'BEGIN:VEVENT',
       `UID:${s.id}@shift-hours`,
-      `DTSTAMP:${stamp}`,
+      `DTSTAMP:${st}`,
       `SEQUENCE:${seq}`,
       `DTSTART:${icsStamp(s.date, s.start, 0)}`,
       `DTEND:${icsStamp(s.date, s.end, crosses ? 1 : 0)}`,
-      icsFold(`SUMMARY:${icsEscape(title)}`),
+      icsFold(`SUMMARY:${icsEscape(job.name)}`),
       icsFold(`DESCRIPTION:${icsEscape(`${(p2.worked/60).toFixed(1)}h · ${yen(p2.pay)}`)}`)
     );
     leads.forEach(lead => lines.push(
-      'BEGIN:VALARM',
-      'ACTION:DISPLAY',
-      `TRIGGER:-PT${lead}M`,
-      icsFold(`DESCRIPTION:${icsEscape(`Shift in ${lead} min${s.label ? ' — ' + s.label : ''}`)}`),
+      'BEGIN:VALARM', 'ACTION:DISPLAY', `TRIGGER:-PT${lead}M`,
+      icsFold(`DESCRIPTION:${icsEscape(`${job.name} in ${lead} min`)}`),
       'END:VALARM'
     ));
     lines.push('END:VEVENT');
@@ -1271,30 +1449,23 @@ function buildIcs(list, leads) {
   lines.push('END:VCALENDAR');
   return lines.join('\r\n');
 }
-
 function downloadIcs() {
   const list = icsScopeShifts();
-  if (!list.length) return alert('No shifts in that range.');
-
+  if (!list.length) return alert('No shifts with times in that range.');
   const lead1 = Math.max(0, +document.getElementById('ics-lead').value || 0);
   const leads = [lead1];
   if (document.getElementById('ics-second').checked) {
     const lead2 = Math.max(0, +document.getElementById('ics-lead2').value || 0);
     if (lead2 && lead2 !== lead1) leads.push(lead2);
   }
-
   const blob = new Blob([buildIcs(list, leads)], { type: 'text/calendar;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = 'shifts.ics';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  a.href = url; a.download = 'shifts.ics';
+  document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
   closeModal('ics-modal');
 }
-
 function openIcsModal() {
   document.getElementById('ics-second-row').style.display =
     document.getElementById('ics-second').checked ? 'block' : 'none';
@@ -1302,57 +1473,96 @@ function openIcsModal() {
   document.getElementById('ics-modal').classList.add('open');
 }
 
-/* ---------- settings ---------- */
-function bandRowHtml(b, i) {
-  return `<div class="band-row" data-i="${i}">
+/* ---------- settings: jobs & rate bands ---------- */
+function bandRowHtml(b) {
+  return `<div class="band-row">
     <input class="bt" type="time" value="${b.start}">
-    <input class="bt" type="time" value="${b.end === '24:00' ? '00:00' : b.end}" data-end="1">
+    <input class="bt" type="time" value="${b.end === '24:00' ? '00:00' : b.end}">
     <input class="br" type="number" min="0" step="10" value="${b.rate}" placeholder="¥/h">
-    <button class="bx" onclick="this.parentElement.remove();validateBands()">×</button>
+    <button class="bx" onclick="this.parentElement.remove();validateJobs()">×</button>
   </div>`;
 }
-function renderBandEditor() {
-  document.getElementById('band-editor').innerHTML =
-    settings.bands.map((b, i) => bandRowHtml(b, i)).join('');
-  document.getElementById('band-editor').addEventListener('input', validateBands);
+function jobCardHtml(j) {
+  return `<div class="job-card" data-job="${j.id}">
+    <div class="job-top">
+      <input class="jc" type="color" value="${j.color}">
+      <input class="jn" type="text" value="${escapeHtml(j.name)}" placeholder="Job name" maxlength="24">
+      <button class="jx" onclick="removeJob('${j.id}')">×</button>
+    </div>
+    <div class="bands">${j.bands.map(bandRowHtml).join('')}</div>
+    <button class="btn-outline" style="width:100%;font-size:0.75rem;padding:5px" onclick="addBandRow(this)">+ Add rate band</button>
+  </div>`;
 }
-function addBandRow() {
-  document.getElementById('band-editor').insertAdjacentHTML(
-    'beforeend', bandRowHtml({ start: '00:00', end: '00:00', rate: 1140 }, settings.bands.length));
-  validateBands();
+function renderJobsEditor() {
+  const box = document.getElementById('jobs-editor');
+  box.innerHTML = settings.jobs.map(jobCardHtml).join('');
+  box.oninput = validateJobs;
 }
-function readBands() {
-  return [...document.querySelectorAll('#band-editor .band-row')].map(row => {
-    const [s, e] = row.querySelectorAll('.bt');
-    const r = row.querySelector('.br');
-    // A midnight end means the end of the day, not the start of it.
-    return { start: s.value, end: e.value === '00:00' ? '24:00' : e.value, rate: +r.value };
-  }).filter(b => b.start && b.end);
+function addJob() {
+  const n = document.querySelectorAll('#jobs-editor .job-card').length;
+  document.getElementById('jobs-editor').insertAdjacentHTML('beforeend', jobCardHtml({
+    id: newJobId(),
+    name: '',
+    color: JOB_COLORS[n % JOB_COLORS.length],
+    bands: DEFAULT_BANDS.map(b => ({ ...b }))
+  }));
+  validateJobs();
 }
-// Bands must tile 00:00–24:00 exactly, or some hours would be paid ¥0.
-function validateBands() {
-  const bands = readBands();
-  const err = document.getElementById('band-err');
-  if (!bands.length) { err.textContent = 'Add at least one band.'; return null; }
-  const iv = bands.map(b => ({
-    s: parseHM(b.start),
-    e: b.end === '24:00' ? DAY : parseHM(b.end),
-    rate: b.rate
-  })).sort((a, b) => a.s - b.s);
+function addBandRow(btn) {
+  btn.previousElementSibling.insertAdjacentHTML('beforeend',
+    bandRowHtml({ start: '00:00', end: '00:00', rate: 1000 }));
+  validateJobs();
+}
+function removeJob(id) {
+  const cards = [...document.querySelectorAll('#jobs-editor .job-card')];
+  if (cards.length <= 1) return alert('You need at least one job.');
+  if (shifts.some(s => s.jobId === id) &&
+      !confirm('Shifts are attached to this job. Remove it anyway? Those shifts move to the first job.')) return;
+  cards.find(c => c.dataset.job === id)?.remove();
+  validateJobs();
+}
 
-  for (const b of iv) {
-    if (b.e <= b.s) { err.textContent = 'Each band must end after it starts.'; return null; }
-    if (!(b.rate >= 0)) { err.textContent = 'Every band needs a rate.'; return null; }
+// Read the editor back. Bands must tile 00:00–24:00 exactly, or some hours would be
+// paid ¥0 and nobody would notice.
+function readJobs() {
+  const err = document.getElementById('band-err');
+  const jobs = [];
+  for (const card of document.querySelectorAll('#jobs-editor .job-card')) {
+    const name = card.querySelector('.jn').value.trim();
+    const color = card.querySelector('.jc').value;
+    const id = card.dataset.job;
+    if (!name) { err.textContent = 'Every job needs a name.'; return null; }
+
+    const bands = [...card.querySelectorAll('.band-row')].map(row => {
+      const [s, e] = row.querySelectorAll('.bt');
+      const r = row.querySelector('.br');
+      return { start: s.value, end: e.value === '00:00' ? '24:00' : e.value, rate: +r.value };
+    }).filter(b => b.start && b.end);
+
+    if (!bands.length) { err.textContent = `${name}: add at least one rate band.`; return null; }
+    const iv = bands.map(b => ({
+      s: parseHM(b.start),
+      e: b.end === '24:00' ? DAY : parseHM(b.end),
+      rate: b.rate
+    })).sort((a, b) => a.s - b.s);
+
+    for (const b of iv) {
+      if (b.e <= b.s) { err.textContent = `${name}: a band must end after it starts.`; return null; }
+      if (!(b.rate >= 0)) { err.textContent = `${name}: every band needs a rate.`; return null; }
+    }
+    if (iv[0].s !== 0) { err.textContent = `${name}: bands must start at 00:00.`; return null; }
+    if (iv[iv.length-1].e !== DAY) { err.textContent = `${name}: bands must run to 24:00.`; return null; }
+    for (let i = 1; i < iv.length; i++) {
+      if (iv[i].s < iv[i-1].e) { err.textContent = `${name}: bands overlap.`; return null; }
+      if (iv[i].s > iv[i-1].e) { err.textContent = `${name}: gap at ${fmtClock(iv[i-1].e)}.`; return null; }
+    }
+    jobs.push({ id, name, color, bands });
   }
-  if (iv[0].s !== 0) { err.textContent = 'Bands must start at 00:00.'; return null; }
-  if (iv[iv.length - 1].e !== DAY) { err.textContent = 'Bands must run to 24:00.'; return null; }
-  for (let i = 1; i < iv.length; i++) {
-    if (iv[i].s < iv[i-1].e) { err.textContent = 'Bands overlap.'; return null; }
-    if (iv[i].s > iv[i-1].e) { err.textContent = `Gap at ${fmtClock(iv[i-1].e)}.`; return null; }
-  }
+  if (!jobs.length) { err.textContent = 'Add at least one job.'; return null; }
   err.textContent = '';
-  return bands;
+  return jobs;
 }
+function validateJobs() { readJobs(); }
 function fmtClock(min) {
   return `${String(Math.floor(min/60)).padStart(2,'0')}:${String(min%60).padStart(2,'0')}`;
 }
@@ -1360,25 +1570,27 @@ function fmtClock(min) {
 function openSettings() {
   document.getElementById('set-name').value = settings.name || '';
   document.getElementById('set-limit').value = settings.limit;
-  document.getElementById('set-holiday').value = settings.holidayRate ?? '';
   document.getElementById('set-autobreak').checked = !!settings.autoBreak;
   document.getElementById('import-box').style.display = 'none';
   document.getElementById('import-json').value = '';
-  renderBandEditor();
-  validateBands();
+  renderJobsEditor();
+  validateJobs();
   document.getElementById('settings-modal').classList.add('open');
 }
 function saveSettings() {
-  const bands = validateBands();
-  if (!bands) return alert('Fix the rate bands first — see the message under them.');
+  const jobs = readJobs();
+  if (!jobs) return alert('Fix the jobs first — see the message under them.');
   const limit = +document.getElementById('set-limit').value;
   if (!(limit > 0)) return alert('Weekly limit must be greater than 0.');
-  const hol = document.getElementById('set-holiday').value.trim();
+
+  // Shifts whose job was removed move to the first remaining job rather than vanish.
+  const alive = new Set(jobs.map(j => j.id));
+  shifts.forEach(s => { if (!alive.has(s.jobId)) { s.jobId = jobs[0].id; stamp(s); } });
+
   settings.name = document.getElementById('set-name').value.trim();
   settings.limit = limit;
-  settings.bands = bands;
-  settings.holidayRate = hol === '' ? null : +hol;
   settings.autoBreak = document.getElementById('set-autobreak').checked;
+  settings.jobs = jobs;
   settings.updatedAt = Date.now();
   save(); closeModal('settings-modal'); render(); pushSoon();
 }
@@ -1412,7 +1624,7 @@ function importData() {
   } catch { alert('That does not look like exported data.'); }
 }
 function wipeAll() {
-  if (!confirm('Delete every shift? Settings are kept.')) return;
+  if (!confirm('Delete every shift? Jobs and rates are kept.')) return;
   shifts.forEach(s => remember(s.id));
   shifts = [];
   save(); render(); closeModal('settings-modal'); pushSoon();
@@ -1427,30 +1639,32 @@ function cloudOn() { return !!(CLOUD.url && CLOUD.anonKey); }
 function toRow(s) {
   return {
     user_id: user.id, id: s.id, date: s.date,
-    start_time: s.start, end_time: s.end,
+    start_time: s.start || '', end_time: s.end || '',
     label: s.label || '', brk: (s.brk === '' ? null : s.brk ?? null),
-    holiday: !!s.holiday, deleted: false,
+    job_id: s.jobId || '', mins: s.mins ?? null, night: !!s.night,
+    deleted: false,
     updated_at: new Date(s.updatedAt || Date.now()).toISOString()
   };
 }
 function fromRow(r) {
   return {
-    id: r.id, date: r.date, start: r.start_time, end: r.end_time,
-    label: r.label || '', brk: r.brk, holiday: !!r.holiday,
+    id: r.id, date: r.date,
+    start: r.start_time || null, end: r.end_time || null,
+    mins: r.mins ?? null, night: !!r.night,
+    jobId: r.job_id || settings.jobs[0].id,
+    label: r.label || '', brk: r.brk,
     updatedAt: new Date(r.updated_at).getTime()
   };
 }
 
-// Merge, never overwrite. Every shift carries the time it was last touched, and the
-// newer side wins per shift — so two phones editing different days both keep their work.
-// Deletions travel as tombstones; without them, a delete on one device would simply be
+// Merge, never overwrite. Each shift carries the time it was last touched and the newer
+// side wins. Deletions travel as tombstones, or a delete on one device would simply be
 // re-created by the other device's copy on the next sync.
 async function syncNow(loud) {
   if (!sb || !user) return;
   const msg = document.getElementById('sync-msg');
   const say = t => { if (msg) msg.textContent = t; };
   say('Syncing…');
-
   try {
     const { data: rows, error } = await sb.from('shifts').select('*').eq('user_id', user.id);
     if (error) throw error;
@@ -1460,12 +1674,10 @@ async function syncNow(loud) {
     const cloudById = new Map((rows || []).map(r => [r.id, r]));
     const upserts = [];
 
-    // Cloud -> local
     (rows || []).forEach(r => {
       const cloudAt = new Date(r.updated_at).getTime();
       const mine = localById.get(r.id);
       const tombAt = tombById.get(r.id);
-
       if (r.deleted) {
         if (mine && cloudAt >= (mine.updatedAt || 0)) {
           shifts = shifts.filter(s => s.id !== r.id);
@@ -1474,16 +1686,11 @@ async function syncNow(loud) {
         }
         return;
       }
-      // A delete here that is newer than the cloud copy must win, not be undone.
       if (tombAt && tombAt >= cloudAt) return;
-      if (!mine) {
-        shifts.push(fromRow(r));
-      } else if (cloudAt > (mine.updatedAt || 0)) {
-        Object.assign(mine, fromRow(r));
-      }
+      if (!mine) shifts.push(fromRow(r));
+      else if (cloudAt > (mine.updatedAt || 0)) Object.assign(mine, fromRow(r));
     });
 
-    // Local -> cloud
     shifts.forEach(s => {
       const r = cloudById.get(s.id);
       const cloudAt = r ? new Date(r.updated_at).getTime() : -1;
@@ -1495,37 +1702,32 @@ async function syncNow(loud) {
       if (!r || (!r.deleted && t.updatedAt > cloudAt)) {
         upserts.push({
           user_id: user.id, id: t.id, date: '1970-01-01',
-          start_time: '00:00', end_time: '00:00', label: '',
-          brk: null, holiday: false, deleted: true,
+          start_time: '', end_time: '', label: '', brk: null,
+          job_id: '', mins: null, night: false, deleted: true,
           updated_at: new Date(t.updatedAt).toISOString()
         });
       }
     });
-
     if (upserts.length) {
       const { error: upErr } = await sb.from('shifts').upsert(upserts, { onConflict: 'user_id,id' });
       if (upErr) throw upErr;
     }
-
     await syncSettings();
 
     save(); render();
     localStorage.setItem('sh_synced', Date.now());
     updateAccountUi();
-    say(`Up to date — ${shifts.length} shift${shifts.length === 1 ? '' : 's'}.`);
-    if (loud) say(`Synced. ${upserts.length} sent, ${shifts.length} total.`);
+    say(loud ? `Synced. ${upserts.length} sent, ${shifts.length} total.` : `Up to date — ${shifts.length} shifts.`);
   } catch (e) {
     say('Sync failed: ' + (e.message || e));
     if (loud) alert('Sync failed: ' + (e.message || e));
   }
 }
-
 async function syncSettings() {
   const { data, error } = await sb.from('settings').select('*').eq('user_id', user.id).maybeSingle();
   if (error) throw error;
   const localAt = settings.updatedAt || 0;
   const cloudAt = data ? new Date(data.updated_at).getTime() : -1;
-
   if (data && cloudAt > localAt) {
     settings = { ...DEFAULT_SETTINGS, ...data.data, updatedAt: cloudAt };
   } else if (localAt > cloudAt) {
@@ -1535,8 +1737,6 @@ async function syncSettings() {
     if (e2) throw e2;
   }
 }
-
-// Coalesce the bursts — adding ten shifts from a paste should be one round trip.
 let pushTimer = null;
 function pushSoon() {
   if (!sb || !user) return;
@@ -1561,8 +1761,7 @@ async function doSignIn() {
   authMsg('Signing in…');
   const { data, error } = await sb.auth.signInWithPassword(c);
   if (error) return authMsg(error.message, true);
-  user = data.user;
-  updateAccountUi();
+  user = data.user; updateAccountUi();
   await syncNow(false);
   closeModal('account-modal');
 }
@@ -1573,25 +1772,20 @@ async function doSignUp() {
   const { data, error } = await sb.auth.signUp(c);
   if (error) return authMsg(error.message, true);
   if (!data.session) return authMsg('Check your email to confirm, then sign in.', false);
-  user = data.user;
-  updateAccountUi();
+  user = data.user; updateAccountUi();
   await syncNow(false);
   closeModal('account-modal');
 }
 async function doSignOut() {
   await sb.auth.signOut();
-  user = null;
-  updateAccountUi();
+  user = null; updateAccountUi();
   closeModal('account-modal');
 }
-
 function updateAccountUi() {
   const btn = document.getElementById('account-btn');
   if (!cloudOn()) { btn.style.display = 'none'; return; }
   btn.style.display = 'flex';
   btn.textContent = user ? '☁️' : '👤';
-  btn.title = user ? `Signed in as ${user.email}` : 'Sign in to sync';
-
   document.getElementById('signed-out').style.display = user ? 'none' : 'block';
   document.getElementById('signed-in').style.display = user ? 'block' : 'none';
   if (user) {
@@ -1608,7 +1802,6 @@ function openAccount() {
   updateAccountUi();
   document.getElementById('account-modal').classList.add('open');
 }
-
 async function initCloud() {
   if (!cloudOn() || typeof supabase === 'undefined') { updateAccountUi(); return; }
   sb = supabase.createClient(CLOUD.url, CLOUD.anonKey);
@@ -1624,7 +1817,6 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
 });
 ['input-start', 'input-end'].forEach(id =>
   document.getElementById(id).addEventListener('change', updateBreakHint));
-
 document.getElementById('ics-scope').addEventListener('change', updateIcsCount);
 document.getElementById('ics-second').addEventListener('change', e => {
   document.getElementById('ics-second-row').style.display = e.target.checked ? 'block' : 'none';
@@ -1636,7 +1828,6 @@ load();
 render();
 initCloud();
 
-// Coming back to the app is the moment another device's edits are most likely waiting.
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && sb && user) syncNow(false);
 });
