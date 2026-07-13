@@ -37,6 +37,9 @@
 
     .card { background: white; border-radius: 12px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
     .card h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: #888; font-weight: 600; margin-bottom: 8px; }
+    /* .hrow is layout only. .fold also collapses the block after it — keep them apart, or
+       a stray .fold on another card hides that card's contents. */
+    .card h3.hrow { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
     .card h3.fold { display: flex; justify-content: space-between; align-items: center; cursor: pointer; touch-action: manipulation; margin-bottom: 0; padding: 2px 0; }
     .card h3.fold .chev { font-size: 0.7rem; color: #bbb; transition: transform 0.15s; }
     .card h3.fold.closed .chev { transform: rotate(-90deg); }
@@ -244,7 +247,7 @@
       <div class="meter"><div class="meter-fill" id="window-meter"></div></div>
     </div>
     <div class="card">
-      <h3 class="fold" style="cursor:default">
+      <h3 class="hrow">
         <span>This month</span>
         <span class="switch" id="money-switch" onclick="toggleMoney()"><i></i></span>
       </h3>
@@ -269,7 +272,7 @@
   </div>
 
   <div class="card">
-    <h3 class="fold" onclick="togglePay()">
+    <h3 class="fold" id="pay-head" onclick="togglePay()">
       <span>Pay breakdown</span>
       <span class="chev" id="pay-chev">▾</span>
     </h3>
@@ -925,7 +928,7 @@ function togglePay() {
   applyPayFold();
 }
 function applyPayFold() {
-  document.querySelector('.card h3.fold').classList.toggle('closed', !settings.showPay);
+  document.getElementById('pay-head').classList.toggle('closed', settings.showPay === false);
 }
 
 function render() {
@@ -2276,7 +2279,7 @@ document.getElementById('ics-second').addEventListener('change', e => {
 });
 
 /* ---------- keeping the installed app up to date ---------- */
-const APP_VERSION = 'v16';
+const APP_VERSION = 'v17';
 
 // Nuke the cached copy of the app and reload from the network. The shifts live in
 // localStorage, which none of this touches.
