@@ -1,4 +1,4 @@
-const CACHE = 'shifthours-v11';
+const CACHE = 'shifthours-v12';
 const FILES = ['/', '/index.html', '/manifest.json', '/icon.png'];
 
 self.addEventListener('install', e => e.waitUntil(

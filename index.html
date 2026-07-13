@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Shift Hours">
+  <meta name="apple-mobile-web-app-title" content="Swift">
   <meta name="theme-color" content="#1a1a2e">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon.png">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <title>Shift Hours</title>
+  <title>Swift</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #222; min-height: 100dvh; display: flex; flex-direction: column; }
@@ -72,9 +72,13 @@
     .cell.has { background: #eef1fe; border-color: #d5ddfc; }
     .cell.risk { background: #fdf0e3; border-color: #f6d5b0; }
     .cell.bad  { background: #fdecea; border-color: #f2c1bc; }
-    .cell .run { font-size: 0.56rem; color: #aaa; line-height: 1; margin-top: 2px; font-variant-numeric: tabular-nums; }
-    .cell .run.warn { color: #e67e22; font-weight: 700; }
-    .cell .run.over { color: #e74c3c; font-weight: 700; }
+    .cell .run { font-size: 0.58rem; line-height: 1; margin-top: 2px; font-variant-numeric: tabular-nums; font-weight: 700; }
+    .cell .run.ok   { color: #27ae60; }
+    .cell .run.warn { color: #e67e22; }
+    .cell .run.over { color: #e74c3c; }
+    /* a long-holiday day, when the cap is raised */
+    .cell.hol { border-style: dashed; border-color: #cfd8e3; }
+    .cell.hol.has { border-color: #b9c6e8; }
     .cell .dots { display: flex; gap: 2px; margin-top: 2px; }
     .cell .dots i { width: 4px; height: 4px; border-radius: 50%; display: block; }
 
@@ -184,7 +188,7 @@
 
 <header>
   <div class="hdr-top">
-    <div class="who" id="who">Shift Hours</div>
+    <div class="who" id="who">Swift</div>
     <div class="hdr-actions">
       <button class="hdr-btn" title="Add shift" onclick="openAddModal()">＋</button>
       <button class="hdr-btn" title="Read shift photo" onclick="openUploadModal()">📷</button>
@@ -449,6 +453,14 @@
         and it counts <b>every job added together</b>, which is how immigration counts it.</p>
     </div>
 
+    <p style="font-size:0.8rem;font-weight:600;margin:16px 0 6px">Long holidays</p>
+    <p class="hint" style="margin:0 0 8px">During an official long vacation the cap rises (usually to
+      40h). A 7-day stretch that is only <b>partly</b> in the holiday keeps the stricter limit — a week
+      containing term-time days is a term-time week.</p>
+    <div id="periods-editor"></div>
+    <button class="btn-outline" style="width:100%;margin-top:4px" onclick="addPeriod()">+ Add holiday</button>
+    <div class="band-err" id="period-err"></div>
+
     <div class="form-group">
       <label class="chk"><input type="checkbox" id="set-autobreak"> Auto-deduct unpaid breaks</label>
       <p class="hint">45 min once a shift passes 6h, 60 min once it passes 8h (労基法34条). Applies to shifts
@@ -495,7 +507,8 @@ const DEFAULT_BANDS = [
 ];
 const DEFAULT_SETTINGS = {
   name: '',
-  limit: 28,
+  limit: 28,       // the normal cap: 資格外活動許可 is 28h in any 7 consecutive days
+  periods: [],     // [{ id, name, from, to, limit }] — long holidays, when the cap rises
   autoBreak: true,
   showPay: true,   // the Pay breakdown card, folded or not — remembered between sessions
   jobs: [{ id: 'j1', name: 'Job', color: JOB_COLORS[0], bands: DEFAULT_BANDS.map(b => ({ ...b })) }]
@@ -778,15 +791,41 @@ function windowTotal(start, dm) {
   for (let i = 0; i < 7; i++) t += dm[addDays(start, i)] || 0;
   return t;
 }
+
+/* --- how many hours a given stretch is allowed --- */
+// A long holiday raises the cap (typically to 40h). A single day's cap is easy.
+function limitOnDay(date) {
+  const p = (settings.periods || []).find(p => date >= p.from && date <= p.to);
+  return p ? +p.limit : +settings.limit;
+}
+function periodOnDay(date) {
+  return (settings.periods || []).find(p => date >= p.from && date <= p.to) || null;
+}
+// A 7-day window can straddle the boundary, and then the two caps disagree. The window
+// takes the STRICTER of the days inside it: a week containing term-time days is a
+// term-time week, so 28h applies even if it ends inside the holiday. Conservative on
+// purpose — the cost of being wrong here is your visa.
+function limitOfWindow(start) {
+  let lim = Infinity;
+  for (let i = 0; i < 7; i++) lim = Math.min(lim, limitOnDay(addDays(start, i)));
+  return lim;
+}
+// The window ending on `date` — the one whose total is printed on that day's cell.
+function limitEndingOn(date) { return limitOfWindow(addDays(date, -6)); }
+
 // "Count back 7 days from here" — the number shown on every day cell.
 function back7(date, dm) { return windowTotal(addDays(date, -6), dm); }
 
-// Every 7-day window that contains `date` — there are 7 of them.
+// Every 7-day window that contains `date` — there are 7 of them, each with its own cap.
 function windowsContaining(date, dm) {
   const out = [];
   for (let i = 6; i >= 0; i--) {
     const start = addDays(date, -i);
-    out.push({ start, end: addDays(start, 6), total: windowTotal(start, dm) });
+    out.push({
+      start, end: addDays(start, 6),
+      total: windowTotal(start, dm),
+      limit: limitOfWindow(start)
+    });
   }
   return out;
 }
@@ -794,11 +833,11 @@ function violationsOf(list) {
   const dm = dayMapOf(list);
   const dates = Object.keys(dm).filter(d => dm[d] > 0).sort();
   if (!dates.length) return [];
-  const limit = settings.limit * 60;
   const bad = [];
   for (let start = addDays(dates[0], -6); start <= dates[dates.length - 1]; start = addDays(start, 1)) {
     const total = windowTotal(start, dm);
-    if (total > limit) bad.push({ start, end: addDays(start, 6), total });
+    const limit = limitOfWindow(start) * 60;
+    if (total > limit) bad.push({ start, end: addDays(start, 6), total, limit: limit / 60 });
   }
   return bad;
 }
@@ -841,8 +880,8 @@ function render() {
   document.getElementById('month-label').textContent =
     view.toLocaleDateString('en', { month: 'long', year: 'numeric' });
   document.getElementById('who').innerHTML = settings.name
-    ? `${escapeHtml(settings.name)} <span>· shifts</span>`
-    : 'Shift Hours';
+    ? `Swift <span>· ${escapeHtml(settings.name)}</span>`
+    : 'Swift';
 
   /* --- month grid --- */
   const first = new Date(year, month, 1);
@@ -860,17 +899,20 @@ function render() {
     const ds = toDateStr(new Date(year, month, day));
     const mins = dm[ds] || 0;
     const run = back7(ds, dm);
+    // Each day carries its own cap: a long holiday raises it.
+    const cap = limitEndingOn(ds) * 60;
 
     const c = document.createElement('div');
     let cls = 'cell';
     if (ds === today) cls += ' today';
-    if (run > limitMin) cls += ' bad';
-    else if (run > limitMin * 0.9) cls += ' risk';
+    if (run > cap) cls += ' bad';
+    else if (run > cap * 0.9) cls += ' risk';
     else if (mins > 0) cls += ' has';
+    if (periodOnDay(ds)) cls += ' hol';
     c.className = cls;
 
     const hrs = mins > 0 ? `<div class="dhrs">${(mins/60).toFixed(1)}</div>` : '';
-    const runCls = run > limitMin ? 'run over' : run > limitMin * 0.9 ? 'run warn' : 'run';
+    const runCls = run > cap ? 'run over' : run > cap * 0.9 ? 'run warn' : 'run ok';
     const runTxt = run > 0 ? `<div class="${runCls}">${(run/60).toFixed(1)}</div>` : '';
 
     let dots = '';
@@ -884,29 +926,39 @@ function render() {
     grid.appendChild(c);
   }
 
+  // Which caps are actually in play this month, so the colours mean something.
+  const caps = [...new Set(Array.from({ length: daysInMonth }, (_, i) =>
+    limitEndingOn(toDateStr(new Date(year, month, i + 1)))))].sort((a, b) => a - b);
   document.getElementById('legend').innerHTML =
-    `<span><i class="dot" style="background:#d5ddfc"></i>worked</span>
-     <span><i class="dot" style="background:#f6d5b0"></i>close to ${settings.limit}h</span>
-     <span><i class="dot" style="background:#f2c1bc"></i>over ${settings.limit}h</span>
-     <span style="margin-left:auto">small number = the 7 days ending that day</span>`;
+    `<span><i class="dot" style="background:#27ae60"></i>fine</span>
+     <span><i class="dot" style="background:#e67e22"></i>close</span>
+     <span><i class="dot" style="background:#e74c3c"></i>over</span>
+     <span style="margin-left:auto">limit ${caps.map(c => c + 'h').join(' / ')}</span>`;
 
-  /* --- worst window across the visible month --- */
-  let worstTotal = 0, worstW = null;
+  /* --- the tightest window across the visible month ---
+   * Ranked by how full it is against ITS OWN cap, not by raw hours: 30h inside a 40h
+   * holiday week is comfortable, 29h in a 28h term week is a breach.
+   */
+  let worstW = null, worstPct = -1;
   for (let day = 1; day <= daysInMonth; day++) {
     const ds = toDateStr(new Date(year, month, day));
     windowsContaining(ds, dm).forEach(w => {
-      if (w.total > worstTotal) { worstTotal = w.total; worstW = w; }
+      const p = w.total / (w.limit * 60);
+      if (p > worstPct) { worstPct = p; worstW = w; }
     });
   }
+  const wTotal = worstW ? worstW.total : 0;
+  const wLimit = worstW ? worstW.limit : settings.limit;
   const wEl = document.getElementById('stat-window');
   const wMeter = document.getElementById('window-meter');
-  wEl.textContent = (worstTotal / 60).toFixed(1) + 'h';
-  const pct = Math.min(100, worstTotal / limitMin * 100);
-  wEl.className = 'stat-big ' + (worstTotal > limitMin ? 'over' : pct > 90 ? 'warn' : 'ok');
+  wEl.textContent = (wTotal / 60).toFixed(1) + 'h';
+  const wOver = wTotal > wLimit * 60;
+  const pct = Math.min(100, wTotal / (wLimit * 60) * 100);
+  wEl.className = 'stat-big ' + (wOver ? 'over' : pct > 90 ? 'warn' : 'ok');
   wMeter.style.width = pct + '%';
-  wMeter.style.background = worstTotal > limitMin ? '#e74c3c' : pct > 90 ? '#e67e22' : '#27ae60';
-  document.getElementById('stat-window-sub').textContent = worstW && worstTotal > 0
-    ? `of ${settings.limit}h · ${shortRange(worstW.start, worstW.end)}`
+  wMeter.style.background = wOver ? '#e74c3c' : pct > 90 ? '#e67e22' : '#27ae60';
+  document.getElementById('stat-window-sub').textContent = worstW && wTotal > 0
+    ? `of ${wLimit}h · ${shortRange(worstW.start, worstW.end)}`
     : `limit ${settings.limit}h`;
 
   /* --- storage failure: the loudest thing on the screen, and nothing is written --- */
@@ -925,9 +977,10 @@ function render() {
   const alertBox = document.getElementById('alert-box');
   if (bad.length) {
     alertBox.style.display = 'block';
-    alertBox.innerHTML = `<b>⚠️ Over the ${settings.limit}h limit in ${bad.length} rolling window${bad.length>1?'s':''}</b><ul>` +
+    alertBox.innerHTML = `<b>⚠️ Over the limit in ${bad.length} rolling window${bad.length>1?'s':''}</b><ul>` +
       bad.slice(0, 6).map(w =>
-        `<li>${shortRange(w.start, w.end)} — <b>${(w.total/60).toFixed(1)}h</b> (+${((w.total-limitMin)/60).toFixed(1)}h)</li>`
+        `<li>${shortRange(w.start, w.end)} — <b>${(w.total/60).toFixed(1)}h</b> of ${w.limit}h
+          (+${((w.total - w.limit*60)/60).toFixed(1)}h)</li>`
       ).join('') +
       (bad.length > 6 ? `<li>…and ${bad.length - 6} more</li>` : '') + '</ul>';
   } else {
@@ -1144,26 +1197,33 @@ function deleteFromDay(btn, id, ds) {
 
 // Leads with the same number the day cell shows — the 7 days ending here.
 function windowVerdict(ds, dm) {
-  const limitMin = settings.limit * 60;
+  const cap = limitEndingOn(ds);          // the 7 days ending here may sit in a holiday
+  const capMin = cap * 60;
   const run = back7(ds, dm);
   const range = shortRange(addDays(ds, -6), ds);
   const hrs = (run / 60).toFixed(1);
+  const p = periodOnDay(ds);
+  const note = p && cap === +p.limit
+    ? ` <span style="color:#aaa">(${escapeHtml(p.name || 'holiday')})</span>` : '';
 
-  if (run > limitMin) {
-    return `<div class="alert" style="margin-top:10px">
+  let html;
+  if (run > capMin) {
+    html = `<div class="alert" style="margin-top:10px">
       <b>⚠️ Over the limit</b>
       The 7 days ending here (${range}) add up to <b>${hrs}h</b> —
-      ${((run - limitMin) / 60).toFixed(1)}h over ${settings.limit}h.</div>`;
+      ${((run - capMin) / 60).toFixed(1)}h over ${cap}h.</div>`;
+  } else {
+    html = `<p class="hint" style="margin-top:10px">
+      The 7 days ending here (${range}) = <b>${hrs}h</b> of ${cap}h${note}. Within the limit.</p>`;
   }
-  let html = `<p class="hint" style="margin-top:10px">
-    The 7 days ending here (${range}) = <b>${hrs}h</b> of ${settings.limit}h. Within the limit.</p>`;
 
-  const other = windowsContaining(ds, dm).filter(w => w.total > limitMin);
-  if (other.length) {
-    const w = other.reduce((a, b) => b.total > a.total ? b : a);
+  // A day can be clean looking backward and still sit inside a stretch that breaks later.
+  const other = windowsContaining(ds, dm).filter(w => w.total > w.limit * 60);
+  if (other.length && run <= capMin) {
+    const w = other.reduce((a, b) => (b.total - b.limit*60) > (a.total - a.limit*60) ? b : a);
     html += `<div class="alert" style="margin-top:8px">But this day falls inside
       ${shortRange(w.start, w.end)}, which reaches <b>${(w.total/60).toFixed(1)}h</b> —
-      over ${settings.limit}h.</div>`;
+      over ${w.limit}h.</div>`;
   }
   return html;
 }
@@ -1295,11 +1355,10 @@ function saveShift() {
 
 function warnIfOver(date) {
   const dm = dayMap();
-  const limitMin = settings.limit * 60;
-  const over = windowsContaining(date, dm).filter(w => w.total > limitMin);
+  const over = windowsContaining(date, dm).filter(w => w.total > w.limit * 60);
   if (over.length) {
-    const w = over.reduce((a, b) => b.total > a.total ? b : a);
-    alert(`⚠️ This puts you at ${(w.total/60).toFixed(1)}h in the 7 days ${shortRange(w.start, w.end)} — over the ${settings.limit}h limit.`);
+    const w = over.reduce((a, b) => (b.total - b.limit*60) > (a.total - a.limit*60) ? b : a);
+    alert(`⚠️ This puts you at ${(w.total/60).toFixed(1)}h in the 7 days ${shortRange(w.start, w.end)} — over the ${w.limit}h limit.`);
   }
 }
 
@@ -1527,20 +1586,19 @@ function previewCheck(kind) {
   const found = pending[kind] || [];
   const picked = found.filter((_, i) => document.getElementById(`${kind}-chk-${i}`)?.checked);
   const el = document.getElementById(kind === 'ocr' ? 'ocr-verdict' : 'paste-verdict');
-  const limitMin = settings.limit * 60;
 
   if (!picked.length) { el.innerHTML = ''; return; }
   const bad = violationsOf(shifts.concat(picked));
   if (!bad.length) {
     const total = picked.reduce((n, s) => n + workedMin(s), 0);
     el.innerHTML = `<div class="verdict ok">✓ Adding these ${picked.length} shift${picked.length>1?'s':''}
-      (${(total/60).toFixed(1)}h) keeps you within ${settings.limit}h in every 7-day stretch.</div>`;
+      (${(total/60).toFixed(1)}h) stays within the limit in every 7-day stretch.</div>`;
     return;
   }
-  el.innerHTML = `<div class="verdict bad"><b>⚠️ These would put you over ${settings.limit}h</b>` +
+  el.innerHTML = `<div class="verdict bad"><b>⚠️ These would put you over the limit</b>` +
     bad.slice(0, 4).map(w =>
-      `<div>${shortRange(w.start, w.end)} — <b>${(w.total/60).toFixed(1)}h</b>
-        (+${((w.total - limitMin)/60).toFixed(1)}h)</div>`).join('') +
+      `<div>${shortRange(w.start, w.end)} — <b>${(w.total/60).toFixed(1)}h</b> of ${w.limit}h
+        (+${((w.total - w.limit*60)/60).toFixed(1)}h)</div>`).join('') +
     (bad.length > 4 ? `<div>…and ${bad.length - 4} more</div>` : '') +
     `<div style="margin-top:5px;opacity:.85">Untick some shifts to see what fixes it.</div></div>`;
 }
@@ -1763,6 +1821,59 @@ function readJobs() {
   return jobs;
 }
 function validateJobs() { readJobs(); }
+
+/* --- long holidays: date ranges where the cap is raised --- */
+function periodRowHtml(p) {
+  return `<div class="job-card" data-period="${p.id}">
+    <div class="job-top">
+      <input class="pn" type="text" value="${escapeHtml(p.name || '')}" placeholder="Summer break" maxlength="24">
+      <button class="jx" onclick="this.closest('.job-card').remove();validatePeriods()">×</button>
+    </div>
+    <div class="band-row">
+      <input class="pf" type="date" value="${p.from}" style="flex:1">
+      <input class="pt" type="date" value="${p.to}" style="flex:1">
+      <input class="pl" type="number" min="1" step="0.5" value="${p.limit}" style="width:64px" placeholder="40">
+    </div>
+    <p class="hint" style="margin:0">from · to · hours</p>
+  </div>`;
+}
+function renderPeriodsEditor() {
+  const box = document.getElementById('periods-editor');
+  box.innerHTML = (settings.periods || []).map(periodRowHtml).join('');
+  box.oninput = validatePeriods;
+}
+function addPeriod() {
+  document.getElementById('periods-editor').insertAdjacentHTML('beforeend', periodRowHtml({
+    id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+    name: '', from: '', to: '', limit: 40
+  }));
+  validatePeriods();
+}
+function readPeriods() {
+  const err = document.getElementById('period-err');
+  const out = [];
+  for (const card of document.querySelectorAll('#periods-editor .job-card')) {
+    const name = card.querySelector('.pn').value.trim();
+    const from = card.querySelector('.pf').value;
+    const to = card.querySelector('.pt').value;
+    const limit = +card.querySelector('.pl').value;
+    if (!from || !to) { err.textContent = 'A holiday needs a start and an end date.'; return null; }
+    if (to < from) { err.textContent = 'A holiday must end after it starts.'; return null; }
+    if (!(limit > 0)) { err.textContent = 'A holiday needs an hours limit.'; return null; }
+    out.push({ id: card.dataset.period, name, from, to, limit });
+  }
+  // Overlapping holidays would make the cap on a day ambiguous.
+  const sorted = [...out].sort((a, b) => a.from.localeCompare(b.from));
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i].from <= sorted[i-1].to) {
+      err.textContent = 'Two holidays overlap — a day cannot have two limits.';
+      return null;
+    }
+  }
+  err.textContent = '';
+  return out;
+}
+function validatePeriods() { readPeriods(); }
 function fmtClock(min) {
   return `${String(Math.floor(min/60)).padStart(2,'0')}:${String(min%60).padStart(2,'0')}`;
 }
@@ -1798,12 +1909,16 @@ function openSettings() {
   document.getElementById('import-json').value = '';
   renderJobsEditor();
   validateJobs();
+  renderPeriodsEditor();
+  validatePeriods();
   renderSnapshots();
   document.getElementById('settings-modal').classList.add('open');
 }
 function saveSettings() {
   const jobs = readJobs();
   if (!jobs) return alert('Fix the jobs first — see the message under them.');
+  const periods = readPeriods();
+  if (!periods) return alert('Fix the long holidays first — see the message under them.');
   const limit = +document.getElementById('set-limit').value;
   if (!(limit > 0)) return alert('Weekly limit must be greater than 0.');
 
@@ -1813,6 +1928,7 @@ function saveSettings() {
 
   settings.name = document.getElementById('set-name').value.trim();
   settings.limit = limit;
+  settings.periods = periods;
   settings.autoBreak = document.getElementById('set-autobreak').checked;
   settings.jobs = jobs;
   settings.updatedAt = Date.now();
