@@ -211,6 +211,7 @@
     </div>
   </div>
 
+  <div class="alert" id="storage-alert" style="display:none"></div>
   <div class="alert" id="alert-box" style="display:none"></div>
 
   <div class="card">
@@ -465,7 +466,13 @@
       <textarea id="import-json" style="height:70px" placeholder="Paste exported data here..."></textarea>
       <button class="btn-save" style="width:100%;margin-top:6px" onclick="importData()">Import</button>
     </div>
-    <button class="btn-danger" style="width:100%" onclick="wipeAll()">Delete all shifts</button>
+
+    <p style="font-size:0.8rem;font-weight:600;margin:16px 0 6px">Backups</p>
+    <p class="hint" style="margin:0 0 8px">Taken automatically — every time the app opens, and before
+      anything that could destroy shifts. Kept on this phone.</p>
+    <div id="snap-list"></div>
+
+    <button class="btn-danger" style="width:100%;margin-top:12px" onclick="wipeAll()">Delete all shifts</button>
   </div>
 </div>
 
@@ -495,14 +502,81 @@ let pending = { ocr: [], paste: [] };
 let tombs = [];
 let sb = null, user = null;
 
-/* ---------- storage ---------- */
+/* ---------- storage ----------
+ *
+ * The danger here is not that a deploy deletes your shifts — it can't; the app and the
+ * data live in different places. The danger is that a future version *misreads* them,
+ * starts up with an empty list, and then the next save writes that emptiness over the
+ * top. Months of hours, gone silently, no undo.
+ *
+ * So: never start empty because reading failed. If the stored data is unreadable, refuse
+ * to save at all and say so, leaving the bytes on disk for a fix. And keep rolling
+ * snapshots under their own key, taken before anything risky, that migrations never touch.
+ */
+const MAX_SNAPSHOTS = 12;
+let storageBroken = false;   // set when the saved data could not be read: save() then refuses
+
 function stamp(s) { s.updatedAt = Date.now(); return s; }
 
+function snapshot(reason) {
+  try {
+    const raw = localStorage.getItem('sh_shifts');
+    if (!raw || raw === '[]') return;                 // nothing worth keeping
+    const snaps = readSnapshots();
+    if (snaps[0] && snaps[0].shifts === raw) return;  // unchanged since the last one
+    snaps.unshift({
+      at: Date.now(), reason,
+      shifts: raw,
+      settings: localStorage.getItem('sh_settings') || '{}'
+    });
+    localStorage.setItem('sh_snaps', JSON.stringify(snaps.slice(0, MAX_SNAPSHOTS)));
+  } catch (e) {
+    // A full disk must not take the app down with it.
+    try {
+      const snaps = readSnapshots().slice(0, 4);
+      localStorage.setItem('sh_snaps', JSON.stringify(snaps));
+    } catch {}
+  }
+}
+function readSnapshots() {
+  try { return JSON.parse(localStorage.getItem('sh_snaps') || '[]'); } catch { return []; }
+}
+function restoreSnapshot(i) {
+  const s = readSnapshots()[i];
+  if (!s) return;
+  if (!confirm(`Restore ${JSON.parse(s.shifts).length} shifts from ${new Date(s.at).toLocaleString()}?\n\nYour current shifts are snapshotted first, so this can be undone.`)) return;
+  snapshot('before restore');
+  localStorage.setItem('sh_shifts', s.shifts);
+  localStorage.setItem('sh_settings', s.settings);
+  storageBroken = false;
+  load(); render();
+  closeModal('settings-modal');
+  alert('Restored.');
+}
+
 function load() {
-  try { shifts = JSON.parse(localStorage.getItem('sh_shifts') || '[]'); } catch { shifts = []; }
+  let rawShifts = localStorage.getItem('sh_shifts');
+  let rawSettings = localStorage.getItem('sh_settings');
+
+  // Read the shifts. A failure here is the dangerous case, so it is never swallowed.
+  if (rawShifts == null || rawShifts === '') {
+    shifts = [];
+  } else {
+    try {
+      const parsed = JSON.parse(rawShifts);
+      if (!Array.isArray(parsed)) throw new Error('shifts are not a list');
+      shifts = parsed;
+    } catch (e) {
+      storageBroken = true;
+      shifts = [];
+      console.error('shift-hours: could not read saved shifts', e);
+    }
+  }
+
   try { tombs = JSON.parse(localStorage.getItem('sh_tombs') || '[]'); } catch { tombs = []; }
+
   let raw = {};
-  try { raw = JSON.parse(localStorage.getItem('sh_settings') || '{}') || {}; } catch { raw = {}; }
+  try { raw = JSON.parse(rawSettings || '{}') || {}; } catch { raw = {}; }
 
   // Decide migration from what was actually STORED. Testing the merged object would
   // always find the default job and quietly discard the user's real rates.
@@ -512,6 +586,7 @@ function load() {
   // Older versions had one global `bands` and no jobs. Fold that into a single job and
   // name it after the place that appears most often in the shifts already saved.
   if (!hadJobs) {
+    if (shifts.length) snapshot('before jobs upgrade');   // keep the pre-migration bytes
     const tally = {};
     shifts.forEach(s => { if (s.label) tally[s.label] = (tally[s.label] || 0) + 1; });
     const common = Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0];
@@ -533,12 +608,25 @@ function load() {
     if (!s.updatedAt) { s.updatedAt = Date.now(); dirty = true; }
     if ('holiday' in s) { delete s.holiday; dirty = true; }
   });
-  if (dirty) localStorage.setItem('sh_shifts', JSON.stringify(shifts));
+  if (dirty && !storageBroken) localStorage.setItem('sh_shifts', JSON.stringify(shifts));
+
+  if (!storageBroken) snapshot('on open');
 }
+
 function save() {
-  localStorage.setItem('sh_shifts', JSON.stringify(shifts));
-  localStorage.setItem('sh_tombs', JSON.stringify(tombs));
-  localStorage.setItem('sh_settings', JSON.stringify(settings));
+  // The saved data could not be read, so what is in memory is not the truth. Writing it
+  // would overwrite whatever is still on disk with an empty or partial list.
+  if (storageBroken) {
+    alert('⚠️ Your saved shifts could not be read, so nothing is being saved — the old data is still on the phone, untouched.\n\nOpen ⚙️ Settings and restore a backup.');
+    return;
+  }
+  try {
+    localStorage.setItem('sh_shifts', JSON.stringify(shifts));
+    localStorage.setItem('sh_tombs', JSON.stringify(tombs));
+    localStorage.setItem('sh_settings', JSON.stringify(settings));
+  } catch (e) {
+    alert('Could not save — the phone is out of storage space.\n\nUse ⚙️ → Copy all data to get your shifts out before doing anything else.');
+  }
 }
 function remember(id) {
   tombs = tombs.filter(t => t.id !== id);
@@ -769,6 +857,17 @@ function render() {
   document.getElementById('stat-window-sub').textContent = worstW && worstTotal > 0
     ? `of ${settings.limit}h · ${shortRange(worstW.start, worstW.end)}`
     : `limit ${settings.limit}h`;
+
+  /* --- storage failure: the loudest thing on the screen, and nothing is written --- */
+  const sa = document.getElementById('storage-alert');
+  if (storageBroken) {
+    sa.style.display = 'block';
+    sa.innerHTML = `<b>⚠️ Your saved shifts could not be read</b>
+      Nothing is being saved, so the data still on this phone is untouched. Do not add shifts —
+      open <b>⚙️ Settings → Backups</b> and restore the most recent one.`;
+  } else {
+    sa.style.display = 'none';
+  }
 
   /* --- violations --- */
   const bad = violations();
@@ -1567,6 +1666,29 @@ function fmtClock(min) {
   return `${String(Math.floor(min/60)).padStart(2,'0')}:${String(min%60).padStart(2,'0')}`;
 }
 
+function renderSnapshots() {
+  const snaps = readSnapshots();
+  const box = document.getElementById('snap-list');
+  if (!snaps.length) {
+    box.innerHTML = '<p class="hint">No backups yet — one is taken next time you open the app.</p>';
+    return;
+  }
+  box.innerHTML = snaps.map((s, i) => {
+    let n = '?';
+    try { n = JSON.parse(s.shifts).length; } catch {}
+    const d = new Date(s.at);
+    const when = d.toLocaleDateString('en', { month: 'short', day: 'numeric' }) + ' ' +
+                 d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' });
+    return `<div class="shift-item" style="cursor:default">
+      <span style="flex:1;min-width:0">
+        <b>${when}</b>
+        <span style="color:#999"> · ${n} shift${n === 1 ? '' : 's'} · ${escapeHtml(s.reason)}</span>
+      </span>
+      <button class="mini" onclick="restoreSnapshot(${i})">Restore</button>
+    </div>`;
+  }).join('');
+}
+
 function openSettings() {
   document.getElementById('set-name').value = settings.name || '';
   document.getElementById('set-limit').value = settings.limit;
@@ -1575,6 +1697,7 @@ function openSettings() {
   document.getElementById('import-json').value = '';
   renderJobsEditor();
   validateJobs();
+  renderSnapshots();
   document.getElementById('settings-modal').classList.add('open');
 }
 function saveSettings() {
@@ -1616,18 +1739,23 @@ function showImportBox() {
 function importData() {
   try {
     const p = JSON.parse(document.getElementById('import-json').value.trim());
+    if (!p.sh_shifts && !p.sh_settings) throw new Error('nothing in it');
+    snapshot('before import');            // an import replaces everything — keep the old copy
     if (p.sh_shifts) localStorage.setItem('sh_shifts', p.sh_shifts);
     if (p.sh_settings) localStorage.setItem('sh_settings', p.sh_settings);
+    storageBroken = false;
     load(); render();
     closeModal('settings-modal');
     alert('Imported.');
   } catch { alert('That does not look like exported data.'); }
 }
 function wipeAll() {
-  if (!confirm('Delete every shift? Jobs and rates are kept.')) return;
+  if (!confirm('Delete every shift? Jobs and rates are kept.\n\nA backup is saved first — you can restore it from Settings.')) return;
+  snapshot('before delete all');
   shifts.forEach(s => remember(s.id));
   shifts = [];
   save(); render(); closeModal('settings-modal'); pushSoon();
+  renderSnapshots();
 }
 
 /* ---------- cloud sync ---------- */

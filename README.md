@@ -107,7 +107,26 @@ shift-hours/
 └── README.md
 ```
 
-Data lives in `localStorage` on the phone. ⚙️ → **Copy all data** / **Paste & import** moves it between Safari and the installed app (they have separate storage), or to a new phone.
+## Not losing the data
+
+Shifts live in `localStorage` on the phone. **Deploying new code cannot delete them** — the app and
+the data are different things in different places, and a new `index.html` overwrites the app only.
+
+The real hazard is a future version that *misreads* the data, starts up with an empty list, and then
+saves that emptiness over the top. So:
+
+- **A read failure never becomes an empty save.** If the stored shifts can't be parsed, the app sets
+  a broken flag, `save()` refuses to write anything, and a red banner tells you to restore. The bytes
+  stay on disk for a fix. (The old code did `catch { shifts = [] }` and would have overwritten them.)
+- **Rolling snapshots** (last 12) under their own key that migrations never touch — taken on every
+  open, and before an import, a migration, or Delete all.
+- **⚙️ → Backups** lists them with date and shift count. Restore snapshots the current state first,
+  so a restore is itself undoable.
+- A full disk is reported, not swallowed.
+
+⚙️ → **Copy all data** / **Paste & import** still moves everything between Safari and the installed
+app (separate storage), or to a new phone. That is the only off-device copy — snapshots live on the
+same phone, so they survive a bad deploy but not a lost phone.
 
 ---
 
