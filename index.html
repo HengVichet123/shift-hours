@@ -720,6 +720,38 @@ function payOf(s) {
   return { buckets, pay, worked, brk: breakOf(s), job };
 }
 
+/* ---------- shifts that cannot both be true ---------- */
+// Absolute minutes since the epoch, so a shift running 22:00→02:00 is correctly seen to
+// spill into the next calendar day and clash with something starting at 00:30 there.
+function absSpan(s) {
+  const base = fromDateStr(s.date).getTime() / 60000;
+  const { a, b } = span(s);
+  return { a: base + a, b: base + b };
+}
+function overlaps(x, y) {
+  if (!isTimed(x) || !isTimed(y)) return false;   // hours-only entries carry no clock
+  const p = absSpan(x), q = absSpan(y);
+  return p.a < q.b && q.a < p.b;                  // touching end-to-end is fine
+}
+function identical(x, y) {
+  if (x.date !== y.date || x.jobId !== y.jobId) return false;
+  if (isTimed(x) !== isTimed(y)) return false;
+  return isTimed(x) ? (x.start === y.start && x.end === y.end) : (+x.mins === +y.mins);
+}
+// Everything already saved that contradicts `s`. `exceptId` skips the shift being edited.
+function conflictsWith(s, exceptId, list) {
+  const others = (list || shifts).filter(x => x.id !== exceptId);
+  return {
+    same: others.filter(x => identical(x, s)),
+    clash: others.filter(x => overlaps(x, s))
+  };
+}
+function describeShift(s) {
+  const job = jobOf(s);
+  const when = isTimed(s) ? `${s.start}–${s.end}` : `${(workedMin(s)/60).toFixed(1)}h`;
+  return multiJob() ? `${when} at ${job.name}` : when;
+}
+
 // Minutes of a shift paid above this job's regular rate.
 function nightMinutesOf(s) {
   const job = jobOf(s);
@@ -1066,8 +1098,25 @@ function openDay(ds) {
     </div>`;
   }).join('');
 
+  // Two shifts on this day that could not both have happened.
+  let dupWarn = '';
+  for (let i = 0; i < mine.length; i++) {
+    for (let j = i + 1; j < mine.length; j++) {
+      if (identical(mine[i], mine[j])) {
+        dupWarn = `<div class="alert" style="margin-top:10px"><b>⚠️ The same shift is in here twice</b>
+          ${describeShift(mine[i])} appears two times, so this day is counting double.
+          Delete one of them.</div>`;
+      } else if (overlaps(mine[i], mine[j]) && !dupWarn) {
+        dupWarn = `<div class="alert" style="margin-top:10px"><b>⚠️ These two overlap</b>
+          ${describeShift(mine[i])} and ${describeShift(mine[j])} run at the same time, so one is
+          wrong — and the hours are being counted twice.</div>`;
+      }
+    }
+  }
+
   body.innerHTML = rows +
     `<div class="row total"><span class="rlabel">${(total/60).toFixed(1)}h worked</span><span class="rval">${yen(pay)}</span></div>` +
+    dupWarn +
     windowVerdict(ds, dm);
   document.getElementById('day-modal').classList.add('open');
 }
@@ -1211,6 +1260,28 @@ function saveShift() {
       brk: brkRaw === '' ? null : Math.max(0, +brkRaw),
       mins: null, night: false
     };
+  }
+
+  // A duplicate is never intended, and it quietly inflates both the pay and the 28h count.
+  const { same, clash } = conflictsWith(data, editingId);
+  if (same.length) {
+    return alert(`That shift is already there — ${data.date}, ${describeShift(data)}.\n\nTap it in the day view to edit it instead.`);
+  }
+  // Overlapping shifts cannot both have happened. Warn, but let it through: a mistyped
+  // end time is better fixed by you than silently refused by me.
+  if (clash.length) {
+    const c = clash[0];
+    const okay = confirm(
+      `This overlaps a shift you already have on ${c.date}: ${describeShift(c)}.\n\n` +
+      `You cannot work two shifts at the same time, so one of them is wrong.\n\nAdd it anyway?`);
+    if (!okay) return;
+  }
+  // Hours-only entries have no clock to compare, so the only impossible thing is a day
+  // that adds up to more than a day.
+  const dayTotal = shifts.filter(x => x.date === data.date && x.id !== editingId)
+                         .reduce((n, x) => n + workedMin(x), 0) + workedMin(data);
+  if (dayTotal > 24 * 60) {
+    if (!confirm(`That would make ${data.date} add up to ${(dayTotal/60).toFixed(1)} hours — more than a day.\n\nAdd it anyway?`)) return;
   }
 
   if (editingId) {
@@ -1412,12 +1483,6 @@ async function handleUpload(e) {
   }
 }
 
-function sameShift(a, b) {
-  if (a.date !== b.date || a.jobId !== b.jobId) return false;
-  if (isTimed(a) !== isTimed(b)) return false;
-  return isTimed(a) ? (a.start === b.start && a.end === b.end) : (+a.mins === +b.mins);
-}
-
 function renderExtracted(kind, found) {
   const status = document.getElementById(kind === 'ocr' ? 'ocr-status' : 'paste-status');
   const box = document.getElementById(kind === 'ocr' ? 'ocr-results' : 'paste-results');
@@ -1435,16 +1500,20 @@ function renderExtracted(kind, found) {
   status.innerHTML = `<p class="hint">Found ${found.length} shift${found.length>1?'s':''}:</p>`;
   box.style.display = 'block';
   box.innerHTML = found.map((s, i) => {
-    const dup = shifts.some(x => sameShift(x, s));
+    // Already saved, or impossible alongside something already saved. Either way it is
+    // unticked by default rather than quietly inflating the hours.
+    const dup = shifts.some(x => identical(x, s));
+    const clash = !dup && shifts.some(x => overlaps(x, s));
     const when = isTimed(s) ? `${s.start}–${s.end}` : `${(s.mins/60).toFixed(1)}h`;
     const job = jobById(s.jobId);
     return `<div class="extracted-item">
-      <input type="checkbox" id="${kind}-chk-${i}" ${dup ? '' : 'checked'} onchange="previewCheck('${kind}')">
+      <input type="checkbox" id="${kind}-chk-${i}" ${dup || clash ? '' : 'checked'} onchange="previewCheck('${kind}')">
       <span>${s.date} ${when} <b>${(workedMin(s)/60).toFixed(1)}h</b>
         ${s.night ? '<span class="tag night">night</span>' : ''}
         ${multiJob() ? `<span class="tag job" style="background:${job.color}">${escapeHtml(job.name)}</span>` : ''}
         <span style="color:#999">${escapeHtml(s.label || '')}</span>
-        ${dup ? '<span class="tag">already added</span>' : ''}</span>
+        ${dup ? '<span class="tag">already added</span>' : ''}
+        ${clash ? '<span class="tag" style="background:#fdecea;color:#c0392b">overlaps a shift you have</span>' : ''}</span>
     </div>`;
   }).join('');
   addBtn.style.display = kind === 'ocr' ? 'block' : 'flex';
