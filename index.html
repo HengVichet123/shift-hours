@@ -87,18 +87,6 @@
     .mini.del { border-color: #fcc; background: #fee; color: #e74c3c; }
     .mini.del.confirming { background: #e74c3c; color: white; border-color: #c0392b; }
 
-    /* Upcoming days as bars */
-    .bar-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 0.75rem; }
-    .bar-row .bd { width: 54px; flex-shrink: 0; color: #666; }
-    .bar-row .bd.today { color: #1a1a2e; font-weight: 700; }
-    .bar-track { flex: 1; height: 14px; background: #f2f2f4; border-radius: 4px; position: relative; overflow: hidden; min-width: 0; }
-    .bar-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; display: flex; overflow: hidden; }
-    .bar-fill i { display: block; height: 100%; }
-    .bar-fill i.reg { background: #4a6cf7; }
-    .bar-fill i.nig { background: #7d5fc4; }
-    .bar-row .bh { width: 62px; flex-shrink: 0; text-align: right; font-variant-numeric: tabular-nums; color: #999; }
-    .bar-row .bh b { color: #222; }
-
     .legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 0.65rem; color: #999; margin-top: 8px; }
     .legend span { display: flex; align-items: center; gap: 3px; }
     .dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
@@ -116,8 +104,10 @@
     /* Shift list */
     .shift-item { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #f4f4f4; cursor: pointer; font-size: 0.82rem; }
     .shift-item:last-child { border-bottom: none; }
+    .shift-item.is-today .sdate { color: #4a6cf7; }
     .shift-item .sdate { font-weight: 600; width: 52px; flex-shrink: 0; }
-    .shift-item .stime { color: #555; width: 96px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+    .shift-item .stime { color: #555; width: 84px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+    .shift-item .shrs { color: #aaa; width: 36px; flex-shrink: 0; font-variant-numeric: tabular-nums; text-align: right; }
     .shift-item .slabel { color: #999; flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; }
     .shift-item .ltxt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .shift-item .spay { font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -213,22 +203,12 @@
   </div>
 
   <div class="card">
-    <h3>Next 7 days</h3>
-    <div id="upcoming"></div>
-    <div class="legend">
-      <span><i class="dot" style="background:#4a6cf7"></i>regular</span>
-      <span><i class="dot" style="background:#7d5fc4"></i>night</span>
-      <span style="margin-left:auto" id="upcoming-sum"></span>
-    </div>
-  </div>
-
-  <div class="card">
     <h3>Pay breakdown</h3>
     <div id="pay-rows"></div>
   </div>
 
   <div class="card">
-    <h3>Shifts <span id="shift-count" style="color:#ccc;font-weight:400"></span></h3>
+    <h3>Upcoming <span id="shift-count" style="color:#ccc;font-weight:400"></span></h3>
     <div id="shift-list"></div>
   </div>
 </main>
@@ -634,7 +614,6 @@ function render() {
   document.getElementById('who').innerHTML = settings.name
     ? `${escapeHtml(settings.name)} <span>· shifts</span>`
     : 'Shift Hours';
-  renderUpcoming();
 
   /* --- month grid --- */
   const first = new Date(year, month, 1);
@@ -744,23 +723,27 @@ function render() {
     `<div class="row total"><span class="rlabel">Gross</span><span class="rval">${yen(gross)}</span></div>`;
   }
 
-  /* --- shift list --- */
+  /* --- what's coming up, from today onward, across months --- */
+  const upcoming = shifts
+    .filter(s => s.date >= today)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
+
   const list = document.getElementById('shift-list');
-  document.getElementById('shift-count').textContent = monthShifts.length ? `· ${monthShifts.length}` : '';
-  if (!monthShifts.length) {
-    list.innerHTML = '<div class="empty">Nothing yet. Tap ＋, 📷 or 📝 to add.</div>';
+  document.getElementById('shift-count').textContent = upcoming.length ? `· ${upcoming.length}` : '';
+  if (!upcoming.length) {
+    list.innerHTML = '<div class="empty">No shifts ahead. Tap ＋, 📷 or 📝 to add.</div>';
   } else {
-    list.innerHTML = monthShifts.map(s => {
-      const p = payOf(s);
+    list.innerHTML = upcoming.map(s => {
       const d = fromDateStr(s.date);
       const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
       const crosses = parseHM(s.end) <= parseHM(s.start);
       const nightMin = nightMinutesOf(s);
-      return `<div class="shift-item" onclick="editShift('${s.id}')">
-        <span class="sdate">${d.getDate()} ${dow}</span>
-        <span class="stime">${s.start}–${s.end}${crosses ? '⁺' : ''} <span style="color:#bbb">${(p.worked/60).toFixed(1)}h</span></span>
+      const isToday = s.date === today;
+      return `<div class="shift-item${isToday ? ' is-today' : ''}" onclick="openDay('${s.date}')">
+        <span class="sdate">${isToday ? 'Today' : `${d.getDate()} ${dow}`}</span>
+        <span class="stime">${s.start}–${s.end}${crosses ? '⁺' : ''}</span>
+        <span class="shrs">${(workedMin(s)/60).toFixed(1)}h</span>
         <span class="slabel"><span class="ltxt">${escapeHtml(s.label || '')}</span>${nightMin > 0 ? '<span class="tag night">night</span>' : ''}${s.holiday ? '<span class="tag holi">holiday</span>' : ''}</span>
-        <span class="spay">${yen(p.pay)}</span>
       </div>`;
     }).join('');
   }
@@ -904,58 +887,6 @@ function capacityNote(cap, worst, limitMin) {
     on this day without breaking the ${settings.limit}h rule.</p>`;
 }
 
-/* ---------- the week ahead, as bars ---------- */
-function renderUpcoming() {
-  const dm = dayMap();
-  const today = toDateStr(new Date());
-  const box = document.getElementById('upcoming');
-  const days = Array.from({ length: 7 }, (_, i) => addDays(today, i));
-  const lowest = Math.min(...settings.bands.map(x => +x.rate));
-
-  const mins = days.map(ds => dm[ds] || 0);
-  const scale = Math.max(8 * 60, ...mins);   // keep bars comparable, floor at an 8h day
-
-  box.innerHTML = days.map((ds, i) => {
-    const d = fromDateStr(ds);
-    const total = mins[i];
-    const cap = capacityOn(ds, dm);
-
-    // Split the bar into regular vs night so the bar says *when*, not just how much.
-    let night = 0;
-    shifts.filter(s => s.date === ds).forEach(s => {
-      const segs = segmentsOf(s);
-      const gross = segs.reduce((n, g) => n + (g.to - g.from), 0);
-      const nightGross = segs.filter(g => g.night).reduce((n, g) => n + (g.to - g.from), 0);
-      night += gross > 0 ? workedMin(s) * (nightGross / gross) : 0;
-    });
-    const reg = Math.max(0, total - night);
-
-    const label = d.toLocaleDateString('en', { weekday: 'short', day: 'numeric' });
-    const fill = total > 0
-      ? `<div class="bar-fill" style="width:${total / scale * 100}%">
-           <i class="reg" style="width:${reg / total * 100}%"></i>
-           <i class="nig" style="width:${night / total * 100}%"></i>
-         </div>`
-      : '';
-    const right = total > 0
-      ? `<b>${(total / 60).toFixed(1)}h</b>`
-      : (cap > 0 ? `+${(cap / 60).toFixed(1)}h` : '0h');
-
-    return `<div class="bar-row" onclick="openDay('${ds}')" style="cursor:pointer">
-      <span class="bd${ds === today ? ' today' : ''}">${ds === today ? 'Today' : label}</span>
-      <span class="bar-track">${fill}</span>
-      <span class="bh">${right}</span>
-    </div>`;
-  }).join('');
-
-  // These same 7 days are themselves one of the rolling windows.
-  const win = mins.reduce((a, b) => a + b, 0);
-  const limitMin = settings.limit * 60;
-  const el = document.getElementById('upcoming-sum');
-  el.textContent = `${(win / 60).toFixed(1)}h of ${settings.limit}h`;
-  el.style.color = win > limitMin ? '#e74c3c' : win > limitMin * 0.9 ? '#e67e22' : '#999';
-}
-
 function shortRange(a, b) {
   const f = d => fromDateStr(d).toLocaleDateString('en', { month: 'short', day: 'numeric' });
   return `${f(a)} – ${f(b)}`;
@@ -1070,37 +1001,52 @@ function closeModal(id) {
 // Handles "▢2026/07/23 (木) 13:00〜18:00 豊橋野依インター", several per line or one
 // per line, with or without the year, and 〜 ~ ～ - – — as the separator.
 function parseShiftText(text) {
-  // Scan for every date+time run rather than splitting on a separator — the bullet
-  // varies (▢ □ ☐ ・ …) and OCR invents its own. Whatever sits between one match and
-  // the next is that shift's label.
-  const re = /(?:(\d{4})\s*[\/\-.年]\s*)?(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})\s*日?\s*(?:[（(][^）)]*[）)])?\s*(\d{1,2})\s*[:：]\s*(\d{2})\s*[〜~～\-–—ー]\s*(\d{1,2})\s*[:：]\s*(\d{2})/g;
+  // Dates and times are scanned separately, then each time range takes the last date
+  // that appeared before it. Work often sends two shifts under one date —
+  //   "7/17 (金) 11:00〜14:00 店 16:00〜19:00 店"
+  // — and a parser that demands a date in front of every time silently drops the
+  // second one. Bullets are ignored entirely (▢ □ ☐ ・ …, plus whatever OCR invents).
+  const dateRe = /(?:(\d{4})\s*[\/\-.年]\s*)?(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})\s*日?/g;
+  const timeRe = /(\d{1,2})\s*[:：]\s*(\d{2})\s*[〜~～\-–—ー]\s*(\d{1,2})\s*[:：]\s*(\d{2})/g;
   const thisYear = new Date().getFullYear();
   const pad = n => String(n).padStart(2, '0');
-  const matches = [...text.matchAll(re)];
-  const out = [];
 
-  matches.forEach((m, i) => {
-    const [, y, mo, d, sh, sm, eh, em] = m;
-    const H = +sh, EH = +eh;
-    if (+mo < 1 || +mo > 12 || +d < 1 || +d > 31) return;
-    if (H > 23 || EH > 24 || +sm > 59 || +em > 59) return;
+  const dates = [...text.matchAll(dateRe)]
+    .filter(m => +m[2] >= 1 && +m[2] <= 12 && +m[3] >= 1 && +m[3] <= 31)
+    .map(m => ({ at: m.index, date: `${m[1] ? +m[1] : thisYear}-${pad(+m[2])}-${pad(+m[3])}` }));
 
+  const times = [...text.matchAll(timeRe)]
+    .filter(m => +m[1] <= 23 && +m[3] <= 24 && +m[2] <= 59 && +m[4] <= 59);
+
+  const out = [], seen = new Set();
+
+  times.forEach((m, i) => {
+    // The date this shift belongs to: the nearest one written before it.
+    const owner = [...dates].reverse().find(d => d.at < m.index);
+    if (!owner) return;   // a time with no date in front of it anywhere — not a shift
+
+    // The label runs until the next time range or the next date, whichever comes first.
     const from = m.index + m[0].length;
-    const to = i + 1 < matches.length ? matches[i + 1].index : text.length;
+    const nextTime = times[i + 1] ? times[i + 1].index : Infinity;
+    const nextDate = dates.find(d => d.at >= from);
+    const to = Math.min(nextTime, nextDate ? nextDate.at : Infinity, text.length);
+
     const label = text.slice(from, to)
-      .split(/[\n\r]/)[0]                       // the label never runs onto the next line
-      .replace(/^[\s　:：\-–—]+/, '')            // leading punctuation left over from the time
-      .replace(/[\s　□■▢▫▪◻◼☐☑☒・･,、]+$/, '')  // the next entry's bullet, trailing junk
+      .split(/[\n\r]/)[0]                       // a label never runs onto the next line
+      .replace(/^[\s　:：\-–—]+/, '')            // leftovers from the time itself
+      .replace(/[\s　□■▢▫▪◻◼☐☑☒・･,、]+$/, '')  // the next entry's bullet
       .trim();
 
-    out.push({
-      date: `${y ? +y : thisYear}-${pad(+mo)}-${pad(+d)}`,
-      start: `${pad(H)}:${sm}`,
-      end: `${pad(EH % 24)}:${em}`,
-      label,
-      holiday: false,
-      brk: null
-    });
+    const shift = {
+      date: owner.date,
+      start: `${pad(+m[1])}:${m[2]}`,
+      end: `${pad(+m[3] % 24)}:${m[4]}`,
+      label, holiday: false, brk: null
+    };
+    const key = `${shift.date} ${shift.start} ${shift.end}`;
+    if (seen.has(key)) return;   // the same shift listed twice in one message
+    seen.add(key);
+    out.push(shift);
   });
   return out;
 }
