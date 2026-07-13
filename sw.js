@@ -1,5 +1,5 @@
 // Cache name is bumped on every release; the old ones are deleted on activate.
-const CACHE = 'swift-v20';
+const CACHE = 'swift-v21';
 
 // RELATIVE paths. The app is served from /shift-hours/, not from the domain root, so
 // '/index.html' pointed at hengvichet123.github.io/index.html — a page that does not

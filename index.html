@@ -97,22 +97,25 @@
     .cell .dots { display: flex; gap: 2px; margin-top: 2px; }
     .cell .dots i { width: 4px; height: 4px; border-radius: 50%; display: block; }
 
-    /* Today, with each number in the day cell named */
-    .key { display: flex; align-items: center; gap: 14px; }
+    /* Today, as the key to a day cell — arrows naming each number */
+    .key { display: flex; align-items: stretch; gap: 8px; }
     .key .kcell {
-      width: 62px; height: 62px; flex-shrink: 0; border-radius: 10px;
+      width: 50px; flex-shrink: 0; border-radius: 8px;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      background: #fafafa; border: 2px solid #1a1a2e; padding: 2px;
+      background: #fafafa; border: 2px solid #1a1a2e; padding: 2px; cursor: pointer;
     }
-    .key .kcell .dnum { font-size: 0.8rem; }
-    .key .kcell .dhrs { font-size: 0.95rem; }
-    .key .kcell .run { font-size: 0.62rem; }
-    .key .krows { flex: 1; min-width: 0; }
-    .key .krow { display: flex; align-items: baseline; gap: 6px; padding: 3px 0; font-size: 0.78rem; }
-    .key .krow .kk { color: #999; flex: 1; }
-    .key .krow .kv { font-weight: 700; font-variant-numeric: tabular-nums; }
-    .key .krow .kv small { font-weight: 400; color: #bbb; font-size: 0.72rem; }
-    .key .krow .kdash { color: #ddd; }
+    .key .kcell .dnum { font-size: 0.72rem; }
+    .key .kcell .dhrs { font-size: 0.8rem; }
+    .key .kcell .run { font-size: 0.56rem; }
+    .key .klab {
+      flex: 1; min-width: 0; display: flex; flex-direction: column;
+      justify-content: center; gap: 3px;
+    }
+    .key .klab div {
+      font-size: 0.6rem; color: #aaa; line-height: 1.15;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .key .klab b { color: #666; font-weight: 600; }
 
     /* Time axis */
     .axis { display: flex; justify-content: space-between; font-size: 0.58rem; color: #bbb; margin-bottom: 3px; }
@@ -257,18 +260,19 @@
 </header>
 
 <main>
-  <div class="card">
-    <h3 id="today-head">Today</h3>
-    <div id="today-key"></div>
-  </div>
-
-  <div class="card">
-    <h3 class="hrow">
-      <span>This month</span>
-      <span class="switch" id="money-switch" onclick="toggleMoney()"><i></i></span>
-    </h3>
-    <div class="stat-big" id="stat-pay">¥0</div>
-    <div class="stat-sub" id="stat-hours">0.0h worked</div>
+  <div class="stats">
+    <div class="card">
+      <h3 id="today-head">Today</h3>
+      <div id="today-key"></div>
+    </div>
+    <div class="card">
+      <h3 class="hrow">
+        <span>This month</span>
+        <span class="switch" id="money-switch" onclick="toggleMoney()"><i></i></span>
+      </h3>
+      <div class="stat-big" id="stat-pay">¥0</div>
+      <div class="stat-sub" id="stat-hours">0.0h worked</div>
+    </div>
   </div>
 
   <div class="alert" id="storage-alert" style="display:none"></div>
@@ -1026,7 +1030,7 @@ function render() {
   const tPeriod = periodOnDay(tds);
 
   document.getElementById('today-head').textContent =
-    tDate.toLocaleDateString('en', { weekday: 'long', month: 'short', day: 'numeric' });
+    tDate.toLocaleDateString('en', { month: 'short', day: 'numeric' });
 
   let kcls = 'kcell';
   if (tRun > tCapMin) kcls += ' bad';
@@ -1035,22 +1039,17 @@ function render() {
 
   document.getElementById('today-key').innerHTML = `
     <div class="key">
-      <div class="${kcls}" onclick="openDay('${tds}')" style="cursor:pointer">
+      <div class="${kcls}" onclick="openDay('${tds}')">
         <div class="dnum">${tDate.getDate()}</div>
         ${tMins > 0 ? `<div class="dhrs">${(tMins/60).toFixed(1)}</div>` : ''}
         ${tRun > 0 ? `<div class="run ${tRunCls}">${(tRun/60).toFixed(1)}</div>` : ''}
       </div>
-      <div class="krows">
-        <div class="krow"><span class="kk">Date</span><span class="kdash">—</span>
-          <span class="kv">${tDate.getDate()}</span></div>
-        <div class="krow"><span class="kk">Hours worked today</span><span class="kdash">—</span>
-          <span class="kv">${(tMins/60).toFixed(1)}</span></div>
-        <div class="krow"><span class="kk">The 7 days ending today</span><span class="kdash">—</span>
-          <span class="kv ${tRunCls}">${(tRun/60).toFixed(1)} <small>of ${tCap}h</small></span></div>
+      <div class="klab">
+        <div>← date</div>
+        <div>← <b>hours</b> today</div>
+        <div>← <b>last 7 days</b>, of ${tCap}h</div>
       </div>
-    </div>
-    ${tPeriod ? `<p class="hint" style="margin-top:8px">${escapeHtml(tPeriod.name || 'Holiday')} —
-      the limit is ${tPeriod.limit}h while it lasts.</p>` : ''}`;
+    </div>`;
 
   /* --- storage failure: the loudest thing on the screen, and nothing is written --- */
   const sa = document.getElementById('storage-alert');
@@ -1305,11 +1304,11 @@ function windowVerdict(ds, dm) {
   if (run > capMin) {
     html = `<div class="alert" style="margin-top:10px">
       <b>⚠️ Over the limit</b>
-      The 7 days ending here (${range}) add up to <b>${hrs}h</b> —
+      Last 7 days (${range}) add up to <b>${hrs}h</b> —
       ${((run - capMin) / 60).toFixed(1)}h over ${cap}h.</div>`;
   } else {
     html = `<p class="hint" style="margin-top:10px">
-      The 7 days ending here (${range}) = <b>${hrs}h</b> of ${cap}h${note}. Within the limit.</p>`;
+      Last 7 days (${range}) = <b>${hrs}h</b> of ${cap}h${note}. Within the limit.</p>`;
   }
 
   // A day can be clean looking backward and still sit inside a stretch that breaks later.
@@ -2312,7 +2311,7 @@ document.getElementById('ics-second').addEventListener('change', e => {
 });
 
 /* ---------- keeping the installed app up to date ---------- */
-const APP_VERSION = 'v20';
+const APP_VERSION = 'v21';
 
 // Nuke the cached copy of the app and reload from the network. The shifts live in
 // localStorage, which none of this touches.
