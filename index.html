@@ -82,6 +82,11 @@
     }
     .cell.blank { background: transparent; border-color: transparent; cursor: default; }
     .cell.today { border-color: #1a1a2e; border-width: 2px; }
+    /* today's date sits in a filled pill, so it is impossible to miss in the grid */
+    .cell.today .dnum {
+      background: #1a1a2e; color: white; font-weight: 700;
+      border-radius: 999px; padding: 1px 7px; margin-bottom: 1px;
+    }
     .cell .dnum { font-size: 0.72rem; color: #666; line-height: 1.1; }
     .cell .dhrs { font-size: 0.78rem; font-weight: 700; line-height: 1.2; margin-top: 1px; }
     .cell.has { background: #eef1fe; border-color: #d5ddfc; }
@@ -98,15 +103,8 @@
     .cell .dots i { width: 4px; height: 4px; border-radius: 50%; display: block; }
 
     /* Today, as the key to a day cell — arrows naming each number */
-    .key { display: flex; align-items: stretch; gap: 8px; }
-    .key .kcell {
-      width: 50px; flex-shrink: 0; border-radius: 8px;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      background: #fafafa; border: 2px solid #1a1a2e; padding: 2px; cursor: pointer;
-    }
-    .key .kcell .dnum { font-size: 0.72rem; }
-    .key .kcell .dhrs { font-size: 0.8rem; }
-    .key .kcell .run { font-size: 0.56rem; }
+    .key { display: flex; align-items: center; gap: 8px; }
+    .key .cell { width: 52px; flex-shrink: 0; }   /* otherwise identical to a grid cell */
     .key .klab {
       flex: 1; min-width: 0; display: flex; flex-direction: column;
       justify-content: center; gap: 3px;
@@ -1030,12 +1028,14 @@ function render() {
   const tPeriod = periodOnDay(tds);
 
   document.getElementById('today-head').textContent =
-    tDate.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+    tDate.toLocaleDateString('en', { weekday: 'short', month: 'short', day: 'numeric' });
 
-  let kcls = 'kcell';
+  // Built with the same classes as a real grid cell, so the key can never drift from it.
+  let kcls = 'cell today';
   if (tRun > tCapMin) kcls += ' bad';
   else if (tRun > tCapMin * 0.9) kcls += ' risk';
   else if (tMins > 0) kcls += ' has';
+  if (periodOnDay(tds)) kcls += ' hol';
 
   document.getElementById('today-key').innerHTML = `
     <div class="key">
@@ -1047,7 +1047,7 @@ function render() {
       <div class="klab">
         <div>← date</div>
         <div>← <b>hours</b> today</div>
-        <div>← <b>last 7 days</b>, of ${tCap}h</div>
+        <div>← <b>last 7 days</b></div>
       </div>
     </div>`;
 
@@ -2311,7 +2311,7 @@ document.getElementById('ics-second').addEventListener('change', e => {
 });
 
 /* ---------- keeping the installed app up to date ---------- */
-const APP_VERSION = 'v21';
+const APP_VERSION = 'v22';
 
 // Nuke the cached copy of the app and reload from the network. The shifts live in
 // localStorage, which none of this touches.
