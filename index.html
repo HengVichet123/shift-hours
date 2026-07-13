@@ -10,6 +10,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon.png">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <title>Shift Hours</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -140,6 +141,7 @@
     <button class="hdr-btn" title="Read shift photo" onclick="openUploadModal()">📷</button>
     <button class="hdr-btn" title="Paste shift text" onclick="openPasteModal()">📝</button>
     <button class="hdr-btn" title="Export to calendar with alarm" onclick="openIcsModal()">⏰</button>
+    <button class="hdr-btn" id="account-btn" title="Account" onclick="openAccount()" style="display:none">👤</button>
     <button class="hdr-btn" title="Settings" onclick="openSettings()">⚙️</button>
   </div>
 </header>
@@ -293,6 +295,51 @@
   </div>
 </div>
 
+<!-- Account -->
+<div class="modal-overlay" id="account-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>Account</h2>
+
+    <div id="signed-out">
+      <p class="hint" style="margin-bottom:12px">
+        Sign in to keep your shifts on every device. Your data is yours alone — the database
+        refuses to hand your rows to anyone else. Without an account the app still works,
+        just only on this device.
+      </p>
+      <div class="form-group"><label>Email</label><input type="email" id="auth-email" autocomplete="username" placeholder="you@example.com"></div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="auth-pass" autocomplete="current-password" placeholder="at least 6 characters">
+      </div>
+      <div id="auth-msg" class="hint"></div>
+      <div class="modal-actions">
+        <button class="btn-outline" onclick="closeModal('account-modal')">Cancel</button>
+        <button class="btn-outline" onclick="doSignUp()">Create account</button>
+        <button class="btn-save" onclick="doSignIn()">Sign in</button>
+      </div>
+    </div>
+
+    <div id="signed-in" style="display:none">
+      <div class="row" style="border:none;padding:0 0 10px">
+        <span class="rlabel">Signed in as</span>
+        <span class="rval" id="auth-who" style="font-weight:600"></span>
+      </div>
+      <div class="row" style="border:none;padding:0 0 12px">
+        <span class="rlabel">Last sync</span>
+        <span class="rhrs" id="sync-when" style="margin:0">never</span>
+      </div>
+      <div id="sync-msg" class="hint" style="margin-bottom:10px"></div>
+      <button class="btn-save" style="width:100%;margin-bottom:8px" onclick="syncNow(true)">Sync now</button>
+      <button class="btn-outline" style="width:100%;margin-bottom:8px" onclick="closeModal('account-modal')">Close</button>
+      <button class="btn-danger" style="width:100%" onclick="doSignOut()">Sign out</button>
+      <p class="hint" style="margin-top:10px">
+        Signing out leaves the shifts on this device; it does not delete anything from the cloud.
+      </p>
+    </div>
+  </div>
+</div>
+
 <!-- Settings -->
 <div class="modal-overlay" id="settings-modal">
   <div class="modal">
@@ -355,20 +402,43 @@ const DEFAULT_SETTINGS = {
   holidayRate: null,
   autoBreak: true
 };
+// Cloud sync is optional. Leave these blank and the app is purely local — no login
+// button, no network. The anon key is safe to publish: it grants nothing on its own,
+// because every table is behind row-level security (see supabase-schema.sql).
+const CLOUD = {
+  url: '',
+  anonKey: ''
+};
+
 let shifts = [], settings = { ...DEFAULT_SETTINGS }, monthOffset = 0, editingId = null;
 let pending = { ocr: [], paste: [] };
+let tombs = [];        // { id, updatedAt } for deleted shifts, so removals reach other devices
+let sb = null, user = null;
 
 /* ---------- storage ---------- */
+function stamp(s) { s.updatedAt = Date.now(); return s; }
+
 function load() {
   try { shifts = JSON.parse(localStorage.getItem('sh_shifts') || '[]'); } catch { shifts = []; }
+  try { tombs = JSON.parse(localStorage.getItem('sh_tombs') || '[]'); } catch { tombs = []; }
   try {
     const s = JSON.parse(localStorage.getItem('sh_settings') || 'null');
     settings = s ? { ...DEFAULT_SETTINGS, ...s } : { ...DEFAULT_SETTINGS };
   } catch { settings = { ...DEFAULT_SETTINGS }; }
+  // Shifts saved before sync existed have no clock on them; treat them as current so
+  // the first sync pushes them up rather than letting an empty cloud erase them.
+  let migrated = false;
+  shifts.forEach(s => { if (!s.updatedAt) { s.updatedAt = Date.now(); migrated = true; } });
+  if (migrated) localStorage.setItem('sh_shifts', JSON.stringify(shifts));
 }
 function save() {
   localStorage.setItem('sh_shifts', JSON.stringify(shifts));
+  localStorage.setItem('sh_tombs', JSON.stringify(tombs));
   localStorage.setItem('sh_settings', JSON.stringify(settings));
+}
+function remember(id) {
+  tombs = tombs.filter(t => t.id !== id);
+  tombs.push({ id, updatedAt: Date.now() });
 }
 
 /* ---------- date helpers ---------- */
@@ -718,11 +788,11 @@ function saveShift() {
 
   if (editingId) {
     const i = shifts.findIndex(x => x.id === editingId);
-    if (i >= 0) shifts[i] = { ...shifts[i], ...data };
+    if (i >= 0) shifts[i] = stamp({ ...shifts[i], ...data });
   } else {
-    shifts.push({ ...data, id: Date.now().toString() + Math.random().toString(36).slice(2, 7) });
+    shifts.push(stamp({ ...data, id: newId() }));
   }
-  save(); closeModal('add-modal'); render();
+  save(); closeModal('add-modal'); render(); pushSoon();
   warnIfOver(data.date);
 }
 
@@ -748,8 +818,9 @@ function deleteCurrentShift() {
     return;
   }
   clearTimeout(deleteTimer);
+  remember(editingId);
   shifts = shifts.filter(x => x.id !== editingId);
-  save(); closeModal('add-modal'); render();
+  save(); closeModal('add-modal'); render(); pushSoon();
 }
 
 function closeModal(id) {
@@ -868,10 +939,10 @@ function addExtracted(kind) {
   found.forEach((s, i) => {
     const chk = document.getElementById(`${kind}-chk-${i}`);
     if (!chk || !chk.checked) return;
-    shifts.push({ ...s, id: Date.now().toString() + Math.random().toString(36).slice(2, 7) });
+    shifts.push(stamp({ ...s, id: newId() }));
     added++;
   });
-  save(); render();
+  save(); render(); pushSoon();
   closeModal(kind === 'ocr' ? 'upload-modal' : 'paste-modal');
   if (added) {
     const bad = violations();
@@ -1072,7 +1143,8 @@ function saveSettings() {
   settings.bands = bands;
   settings.holidayRate = hol === '' ? null : +hol;
   settings.autoBreak = document.getElementById('set-autobreak').checked;
-  save(); closeModal('settings-modal'); render();
+  settings.updatedAt = Date.now();
+  save(); closeModal('settings-modal'); render(); pushSoon();
 }
 
 /* ---------- data transfer ---------- */
@@ -1105,8 +1177,209 @@ function importData() {
 }
 function wipeAll() {
   if (!confirm('Delete every shift? Settings are kept.')) return;
+  shifts.forEach(s => remember(s.id));
   shifts = [];
-  save(); render(); closeModal('settings-modal');
+  save(); render(); closeModal('settings-modal'); pushSoon();
+}
+
+/* ---------- cloud sync ---------- */
+function newId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
+}
+function cloudOn() { return !!(CLOUD.url && CLOUD.anonKey); }
+
+function toRow(s) {
+  return {
+    user_id: user.id, id: s.id, date: s.date,
+    start_time: s.start, end_time: s.end,
+    label: s.label || '', brk: (s.brk === '' ? null : s.brk ?? null),
+    holiday: !!s.holiday, deleted: false,
+    updated_at: new Date(s.updatedAt || Date.now()).toISOString()
+  };
+}
+function fromRow(r) {
+  return {
+    id: r.id, date: r.date, start: r.start_time, end: r.end_time,
+    label: r.label || '', brk: r.brk, holiday: !!r.holiday,
+    updatedAt: new Date(r.updated_at).getTime()
+  };
+}
+
+// Merge, never overwrite. Every shift carries the time it was last touched, and the
+// newer side wins per shift — so two phones editing different days both keep their work.
+// Deletions travel as tombstones; without them, a delete on one device would simply be
+// re-created by the other device's copy on the next sync.
+async function syncNow(loud) {
+  if (!sb || !user) return;
+  const msg = document.getElementById('sync-msg');
+  const say = t => { if (msg) msg.textContent = t; };
+  say('Syncing…');
+
+  try {
+    const { data: rows, error } = await sb.from('shifts').select('*').eq('user_id', user.id);
+    if (error) throw error;
+
+    const localById = new Map(shifts.map(s => [s.id, s]));
+    const tombById = new Map(tombs.map(t => [t.id, t.updatedAt]));
+    const cloudById = new Map((rows || []).map(r => [r.id, r]));
+    const upserts = [];
+
+    // Cloud -> local
+    (rows || []).forEach(r => {
+      const cloudAt = new Date(r.updated_at).getTime();
+      const mine = localById.get(r.id);
+      const tombAt = tombById.get(r.id);
+
+      if (r.deleted) {
+        if (mine && cloudAt >= (mine.updatedAt || 0)) {
+          shifts = shifts.filter(s => s.id !== r.id);
+          localById.delete(r.id);
+          if (!tombAt) tombs.push({ id: r.id, updatedAt: cloudAt });
+        }
+        return;
+      }
+      // A delete here that is newer than the cloud copy must win, not be undone.
+      if (tombAt && tombAt >= cloudAt) return;
+      if (!mine) {
+        shifts.push(fromRow(r));
+      } else if (cloudAt > (mine.updatedAt || 0)) {
+        Object.assign(mine, fromRow(r));
+      }
+    });
+
+    // Local -> cloud
+    shifts.forEach(s => {
+      const r = cloudById.get(s.id);
+      const cloudAt = r ? new Date(r.updated_at).getTime() : -1;
+      if (!r || (s.updatedAt || 0) > cloudAt) upserts.push(toRow(s));
+    });
+    tombs.forEach(t => {
+      const r = cloudById.get(t.id);
+      const cloudAt = r ? new Date(r.updated_at).getTime() : -1;
+      if (!r || (!r.deleted && t.updatedAt > cloudAt)) {
+        upserts.push({
+          user_id: user.id, id: t.id, date: '1970-01-01',
+          start_time: '00:00', end_time: '00:00', label: '',
+          brk: null, holiday: false, deleted: true,
+          updated_at: new Date(t.updatedAt).toISOString()
+        });
+      }
+    });
+
+    if (upserts.length) {
+      const { error: upErr } = await sb.from('shifts').upsert(upserts, { onConflict: 'user_id,id' });
+      if (upErr) throw upErr;
+    }
+
+    await syncSettings();
+
+    save(); render();
+    localStorage.setItem('sh_synced', Date.now());
+    updateAccountUi();
+    say(`Up to date — ${shifts.length} shift${shifts.length === 1 ? '' : 's'}.`);
+    if (loud) say(`Synced. ${upserts.length} sent, ${shifts.length} total.`);
+  } catch (e) {
+    say('Sync failed: ' + (e.message || e));
+    if (loud) alert('Sync failed: ' + (e.message || e));
+  }
+}
+
+async function syncSettings() {
+  const { data, error } = await sb.from('settings').select('*').eq('user_id', user.id).maybeSingle();
+  if (error) throw error;
+  const localAt = settings.updatedAt || 0;
+  const cloudAt = data ? new Date(data.updated_at).getTime() : -1;
+
+  if (data && cloudAt > localAt) {
+    settings = { ...DEFAULT_SETTINGS, ...data.data, updatedAt: cloudAt };
+  } else if (localAt > cloudAt) {
+    const { error: e2 } = await sb.from('settings').upsert({
+      user_id: user.id, data: settings, updated_at: new Date(localAt).toISOString()
+    }, { onConflict: 'user_id' });
+    if (e2) throw e2;
+  }
+}
+
+// Coalesce the bursts — adding ten shifts from a paste should be one round trip.
+let pushTimer = null;
+function pushSoon() {
+  if (!sb || !user) return;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => syncNow(false), 1200);
+}
+
+/* ---------- auth ---------- */
+function authMsg(t, bad) {
+  const el = document.getElementById('auth-msg');
+  el.textContent = t;
+  el.style.color = bad ? '#e74c3c' : '#999';
+}
+function creds() {
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-pass').value;
+  if (!email || !password) { authMsg('Enter an email and password.', true); return null; }
+  return { email, password };
+}
+async function doSignIn() {
+  const c = creds(); if (!c) return;
+  authMsg('Signing in…');
+  const { data, error } = await sb.auth.signInWithPassword(c);
+  if (error) return authMsg(error.message, true);
+  user = data.user;
+  updateAccountUi();
+  await syncNow(false);
+  closeModal('account-modal');
+}
+async function doSignUp() {
+  const c = creds(); if (!c) return;
+  if (c.password.length < 6) return authMsg('Password must be at least 6 characters.', true);
+  authMsg('Creating account…');
+  const { data, error } = await sb.auth.signUp(c);
+  if (error) return authMsg(error.message, true);
+  if (!data.session) return authMsg('Check your email to confirm, then sign in.', false);
+  user = data.user;
+  updateAccountUi();
+  await syncNow(false);
+  closeModal('account-modal');
+}
+async function doSignOut() {
+  await sb.auth.signOut();
+  user = null;
+  updateAccountUi();
+  closeModal('account-modal');
+}
+
+function updateAccountUi() {
+  const btn = document.getElementById('account-btn');
+  if (!cloudOn()) { btn.style.display = 'none'; return; }
+  btn.style.display = 'flex';
+  btn.textContent = user ? '☁️' : '👤';
+  btn.title = user ? `Signed in as ${user.email}` : 'Sign in to sync';
+
+  document.getElementById('signed-out').style.display = user ? 'none' : 'block';
+  document.getElementById('signed-in').style.display = user ? 'block' : 'none';
+  if (user) {
+    document.getElementById('auth-who').textContent = user.email;
+    const t = +(localStorage.getItem('sh_synced') || 0);
+    document.getElementById('sync-when').textContent = t
+      ? new Date(t).toLocaleString('en', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : 'never';
+  }
+}
+function openAccount() {
+  document.getElementById('auth-msg').textContent = '';
+  document.getElementById('sync-msg').textContent = '';
+  updateAccountUi();
+  document.getElementById('account-modal').classList.add('open');
+}
+
+async function initCloud() {
+  if (!cloudOn() || typeof supabase === 'undefined') { updateAccountUi(); return; }
+  sb = supabase.createClient(CLOUD.url, CLOUD.anonKey);
+  const { data } = await sb.auth.getSession();
+  user = data.session ? data.session.user : null;
+  updateAccountUi();
+  if (user) syncNow(false);
 }
 
 /* ---------- boot ---------- */
@@ -1125,6 +1398,12 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 
 load();
 render();
+initCloud();
+
+// Coming back to the app is the moment another device's edits are most likely waiting.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && sb && user) syncNow(false);
+});
 </script>
 </body>
 </html>

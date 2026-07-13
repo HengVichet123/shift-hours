@@ -93,3 +93,33 @@ Data lives in `localStorage` on the phone. ⚙️ → **Copy all data** / **Past
 Push to GitHub, then **Settings → Pages → Source: `main` / root**. Open the Pages URL on the iPhone in Safari → Share → **Add to Home Screen**.
 
 After changing `index.html`, bump the cache version in `sw.js` (`shifthours-vN` → `vN+1`) or the phone will keep serving the old copy.
+
+---
+
+## Accounts & cloud sync (optional)
+
+Off by default. With it off, the app is local-only and nothing leaves the phone.
+
+To turn it on, create a free [Supabase](https://supabase.com) project, run `supabase-schema.sql`
+in its SQL Editor, then fill in the `CLOUD` block near the top of the `<script>` in `index.html`:
+
+```js
+const CLOUD = {
+  url:     'https://xxxxxxxx.supabase.co',
+  anonKey: 'eyJhbGci...'
+};
+```
+
+The anon key is *meant* to be public — it grants nothing by itself. Every table is behind
+**Row Level Security**, so Postgres refuses to return one user's rows to another. That guarantee
+lives in the database, not in this JavaScript, so a frontend bug cannot leak anyone's hours.
+
+Once configured, a 👤 button appears. Sign in and shifts sync across devices; the app stays
+local-first and keeps working offline. Sync **merges** rather than overwrites: each shift carries
+the time it was last edited and the newer side wins, and deletions travel as tombstones so a shift
+removed on one phone doesn't get resurrected by another.
+
+**If you let other people sign up, you are holding their data** — and it is the record of whether
+they have exceeded their 28-hour visa limit. Keep the circle small, and under Japan's 個人情報保護法
+(APPI) be ready to delete someone's data on request (`delete from auth.users where email = ...`
+cascades to everything they own).
