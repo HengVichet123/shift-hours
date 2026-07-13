@@ -97,6 +97,23 @@
     .cell .dots { display: flex; gap: 2px; margin-top: 2px; }
     .cell .dots i { width: 4px; height: 4px; border-radius: 50%; display: block; }
 
+    /* Today, with each number in the day cell named */
+    .key { display: flex; align-items: center; gap: 14px; }
+    .key .kcell {
+      width: 62px; height: 62px; flex-shrink: 0; border-radius: 10px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: #fafafa; border: 2px solid #1a1a2e; padding: 2px;
+    }
+    .key .kcell .dnum { font-size: 0.8rem; }
+    .key .kcell .dhrs { font-size: 0.95rem; }
+    .key .kcell .run { font-size: 0.62rem; }
+    .key .krows { flex: 1; min-width: 0; }
+    .key .krow { display: flex; align-items: baseline; gap: 6px; padding: 3px 0; font-size: 0.78rem; }
+    .key .krow .kk { color: #999; flex: 1; }
+    .key .krow .kv { font-weight: 700; font-variant-numeric: tabular-nums; }
+    .key .krow .kv small { font-weight: 400; color: #bbb; font-size: 0.72rem; }
+    .key .krow .kdash { color: #ddd; }
+
     /* Time axis */
     .axis { display: flex; justify-content: space-between; font-size: 0.58rem; color: #bbb; margin-bottom: 3px; }
     .track { position: relative; height: 22px; background: #f4f4f6; border-radius: 5px; overflow: hidden; }
@@ -240,21 +257,18 @@
 </header>
 
 <main>
-  <div class="stats">
-    <div class="card">
-      <h3>Worst 7-day window</h3>
-      <div class="stat-big" id="stat-window">0.0h</div>
-      <div class="stat-sub" id="stat-window-sub">limit 28h</div>
-      <div class="meter"><div class="meter-fill" id="window-meter"></div></div>
-    </div>
-    <div class="card">
-      <h3 class="hrow">
-        <span>This month</span>
-        <span class="switch" id="money-switch" onclick="toggleMoney()"><i></i></span>
-      </h3>
-      <div class="stat-big" id="stat-pay">¥0</div>
-      <div class="stat-sub" id="stat-hours">0.0h worked</div>
-    </div>
+  <div class="card">
+    <h3 id="today-head">Today</h3>
+    <div id="today-key"></div>
+  </div>
+
+  <div class="card">
+    <h3 class="hrow">
+      <span>This month</span>
+      <span class="switch" id="money-switch" onclick="toggleMoney()"><i></i></span>
+    </h3>
+    <div class="stat-big" id="stat-pay">¥0</div>
+    <div class="stat-sub" id="stat-hours">0.0h worked</div>
   </div>
 
   <div class="alert" id="storage-alert" style="display:none"></div>
@@ -998,31 +1012,45 @@ function render() {
      <span><i class="dot" style="background:#e74c3c"></i>over</span>
      <span style="margin-left:auto">limit ${caps.map(c => c + 'h').join(' / ')}</span>`;
 
-  /* --- the tightest window across the visible month ---
-   * Ranked by how full it is against ITS OWN cap, not by raw hours: 30h inside a 40h
-   * holiday week is comfortable, 29h in a 28h term week is a breach.
+  /* --- today, used as the key to the grid ---
+   * A worst-case statistic is something you read once. The numbers in a day cell are
+   * something you read every time, so name them using today's real ones.
    */
-  let worstW = null, worstPct = -1;
-  for (let day = 1; day <= daysInMonth; day++) {
-    const ds = toDateStr(new Date(year, month, day));
-    windowsContaining(ds, dm).forEach(w => {
-      const p = w.total / (w.limit * 60);
-      if (p > worstPct) { worstPct = p; worstW = w; }
-    });
-  }
-  const wTotal = worstW ? worstW.total : 0;
-  const wLimit = worstW ? worstW.limit : settings.limit;
-  const wEl = document.getElementById('stat-window');
-  const wMeter = document.getElementById('window-meter');
-  wEl.textContent = (wTotal / 60).toFixed(1) + 'h';
-  const wOver = wTotal > wLimit * 60;
-  const pct = Math.min(100, wTotal / (wLimit * 60) * 100);
-  wEl.className = 'stat-big ' + (wOver ? 'over' : pct > 90 ? 'warn' : 'ok');
-  wMeter.style.width = pct + '%';
-  wMeter.style.background = wOver ? '#e74c3c' : pct > 90 ? '#e67e22' : '#27ae60';
-  document.getElementById('stat-window-sub').textContent = worstW && wTotal > 0
-    ? `of ${wLimit}h · ${shortRange(worstW.start, worstW.end)}`
-    : `limit ${settings.limit}h`;
+  const tds = today;
+  const tMins = dm[tds] || 0;
+  const tRun = back7(tds, dm);
+  const tCap = limitEndingOn(tds);
+  const tCapMin = tCap * 60;
+  const tRunCls = tRun > tCapMin ? 'over' : tRun > tCapMin * 0.9 ? 'warn' : 'ok';
+  const tDate = fromDateStr(tds);
+  const tPeriod = periodOnDay(tds);
+
+  document.getElementById('today-head').textContent =
+    tDate.toLocaleDateString('en', { weekday: 'long', month: 'short', day: 'numeric' });
+
+  let kcls = 'kcell';
+  if (tRun > tCapMin) kcls += ' bad';
+  else if (tRun > tCapMin * 0.9) kcls += ' risk';
+  else if (tMins > 0) kcls += ' has';
+
+  document.getElementById('today-key').innerHTML = `
+    <div class="key">
+      <div class="${kcls}" onclick="openDay('${tds}')" style="cursor:pointer">
+        <div class="dnum">${tDate.getDate()}</div>
+        ${tMins > 0 ? `<div class="dhrs">${(tMins/60).toFixed(1)}</div>` : ''}
+        ${tRun > 0 ? `<div class="run ${tRunCls}">${(tRun/60).toFixed(1)}</div>` : ''}
+      </div>
+      <div class="krows">
+        <div class="krow"><span class="kk">Date</span><span class="kdash">—</span>
+          <span class="kv">${tDate.getDate()}</span></div>
+        <div class="krow"><span class="kk">Hours worked today</span><span class="kdash">—</span>
+          <span class="kv">${(tMins/60).toFixed(1)}</span></div>
+        <div class="krow"><span class="kk">The 7 days ending today</span><span class="kdash">—</span>
+          <span class="kv ${tRunCls}">${(tRun/60).toFixed(1)} <small>of ${tCap}h</small></span></div>
+      </div>
+    </div>
+    ${tPeriod ? `<p class="hint" style="margin-top:8px">${escapeHtml(tPeriod.name || 'Holiday')} —
+      the limit is ${tPeriod.limit}h while it lasts.</p>` : ''}`;
 
   /* --- storage failure: the loudest thing on the screen, and nothing is written --- */
   const sa = document.getElementById('storage-alert');
@@ -2284,7 +2312,7 @@ document.getElementById('ics-second').addEventListener('change', e => {
 });
 
 /* ---------- keeping the installed app up to date ---------- */
-const APP_VERSION = 'v19';
+const APP_VERSION = 'v20';
 
 // Nuke the cached copy of the app and reload from the network. The shifts live in
 // localStorage, which none of this touches.
