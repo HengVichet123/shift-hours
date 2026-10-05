@@ -350,6 +350,47 @@
     }
     .legend-read { flex-basis: 100%; order: 5; }
 
+    /* Month title is a button: it opens the picker */
+    .month-label { background: none; border: none; text-align: left; cursor: pointer; padding: 0; color: var(--ink); font-family: inherit; white-space: nowrap; }
+    .month-label::after { content: ''; display: inline-block; width: 8px; height: 8px; margin-left: 10px; vertical-align: 0.22em;
+      border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); }
+    .month-label[aria-expanded="true"]::after { transform: rotate(-135deg); vertical-align: 0; }
+    .month-nav .today-btn { width: auto; padding: 0 14px; font-size: 0.84rem; font-weight: 600; color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+
+    .picker {
+      position: fixed; z-index: 60; top: 108px; left: 12px; right: 12px; max-width: 380px;
+      background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card);
+      box-shadow: 0 16px 40px rgba(10, 16, 13, 0.18); padding: 14px;
+      animation: sheet-in 0.18s cubic-bezier(.2,.8,.2,1);
+    }
+    .picker[hidden] { display: none; }
+    .picker-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .picker-head b { font-size: 1.05rem; }
+    .picker-head button { width: 36px; height: 36px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .picker-head .ico { width: 14px; height: 14px; }
+    .picker-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+    .pm {
+      border: 1px solid transparent; background: var(--surface-2); border-radius: var(--r-ctl);
+      padding: 10px 4px 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px;
+      position: relative; touch-action: manipulation;
+    }
+    .pm span { font-size: 0.9rem; font-weight: 600; }
+    .pm small { font-size: 0.7rem; color: var(--muted); }
+    .pm:hover { border-color: var(--line); }
+    .pm.now span { color: var(--accent); }
+    .pm.on { background: var(--accent); }
+    .pm.on span, .pm.on small { color: var(--accent-ink); }
+    .pm.over::after { content: ''; position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--over); }
+    .picker-foot { display: flex; justify-content: space-between; gap: 8px; margin-top: 10px; font-size: 0.68rem; color: var(--muted); }
+    .picker-foot span { display: flex; align-items: center; gap: 5px; }
+
+    .grid.slide-next { animation: slide-next 0.22s cubic-bezier(.2,.8,.2,1); }
+    .grid.slide-prev { animation: slide-prev 0.22s cubic-bezier(.2,.8,.2,1); }
+    @keyframes slide-next { from { opacity: 0.2; transform: translateX(18px); } to { opacity: 1; transform: none; } }
+    @keyframes slide-prev { from { opacity: 0.2; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
+    @media (min-width: 1100px) { .picker { top: 72px; left: 32px; right: auto; width: 380px; } }
+    @media (hover: none) { .picker-foot span:last-child { display: none; } }
+
     /* ---------- layout ----------
        Phone: one column (rail, calendar, side), as before.
        Tablet: summary rail left, calendar right, side under the rail.
@@ -414,7 +455,8 @@
       header { flex-direction: row; align-items: center; gap: 24px; padding: 14px 32px; }
       header .hdr-top { order: 2; flex: 1; }
       header .month-nav { order: 1; gap: 8px; }
-      header .month-label { font-size: 1.9rem; order: 3; margin-left: 8px; }
+      header .month-label { font-size: 1.9rem; order: 3; margin-left: 8px; flex: none; }
+      header .month-nav .today-btn { order: 4; margin-left: 8px; }
       .who { display: none; }
       .hdr-actions { margin-left: auto; gap: 6px; }
       .hdr-btn { width: auto; padding: 0 12px; gap: 8px; height: 40px; }
@@ -470,11 +512,22 @@
     </div>
   </div>
   <div class="month-nav">
-    <span class="month-label" id="month-label"></span>
+    <button class="month-label" id="month-label" onclick="togglePicker()" aria-haspopup="dialog" aria-expanded="false"></button>
+    <button class="today-btn" id="today-btn" onclick="goToday()" style="display:none">Today</button>
     <button onclick="changeMonth(-1)" aria-label="Previous month"><svg class="ico" aria-hidden="true"><use href="#i-caret-left"/></svg></button>
     <button onclick="changeMonth(1)" aria-label="Next month"><svg class="ico" aria-hidden="true"><use href="#i-caret-right"/></svg></button>
   </div>
 </header>
+
+<div class="picker" id="month-picker" role="dialog" aria-label="Pick a month" hidden>
+  <div class="picker-head">
+    <button onclick="pickerStep(-1)" aria-label="Previous year"><svg class="ico" aria-hidden="true"><use href="#i-caret-left"/></svg></button>
+    <b id="picker-year"></b>
+    <button onclick="pickerStep(1)" aria-label="Next year"><svg class="ico" aria-hidden="true"><use href="#i-caret-right"/></svg></button>
+  </div>
+  <div class="picker-grid" id="picker-grid"></div>
+  <div class="picker-foot"><span><i class="dot" style="background:var(--over)"></i> went over the limit</span><span>←/→ month · T today</span></div>
+</div>
 
 <main class="layout">
   <aside class="rail">
@@ -1174,7 +1227,83 @@ function shortRange(a, b) {
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 }
-function changeMonth(dir) { monthOffset += dir; render(); }
+function changeMonth(dir) { monthOffset += dir; render(); slideGrid(dir); }
+function goToday() { const dir = monthOffset > 0 ? -1 : 1; monthOffset = 0; render(); slideGrid(dir); }
+// A short slide in the direction you moved, so a month change reads as movement.
+function slideGrid(dir) {
+  const g = document.getElementById('month-grid');
+  g.classList.remove('slide-next', 'slide-prev');
+  void g.offsetWidth;
+  g.classList.add(dir > 0 ? 'slide-next' : 'slide-prev');
+}
+
+/* ---------- month picker: the year at a glance, tap a month to go there ---------- */
+let pickerYear = null;
+function togglePicker() {
+  const el = document.getElementById('month-picker');
+  if (!el.hidden) return closePicker();
+  pickerYear = monthView().getFullYear();
+  renderPicker();
+  el.hidden = false;
+  document.getElementById('month-label').setAttribute('aria-expanded', 'true');
+}
+function closePicker() {
+  document.getElementById('month-picker').hidden = true;
+  document.getElementById('month-label').setAttribute('aria-expanded', 'false');
+}
+function pickerStep(d) { pickerYear += d; renderPicker(); }
+function renderPicker() {
+  document.getElementById('picker-year').textContent = pickerYear;
+  const view = monthView(), now = new Date();
+  const overMonths = new Set(violations().map(w => w.end.slice(0, 7)));
+  const mins = {};
+  shifts.forEach(s => { const k = s.date.slice(0, 7); mins[k] = (mins[k] || 0) + workedMin(s); });
+  document.getElementById('picker-grid').innerHTML = Array.from({ length: 12 }, (_, m) => {
+    const key = `${pickerYear}-${String(m + 1).padStart(2, '0')}`;
+    const off = (pickerYear - now.getFullYear()) * 12 + m - now.getMonth();
+    const cls = ['pm',
+      pickerYear === view.getFullYear() && m === view.getMonth() ? 'on' : '',
+      off === 0 ? 'now' : '',
+      overMonths.has(key) ? 'over' : ''].join(' ');
+    const name = new Date(pickerYear, m, 1).toLocaleDateString('en', { month: 'short' });
+    return `<button class="${cls}" onclick="pickMonth(${off})">
+      <span>${name}</span><small>${mins[key] ? (mins[key] / 60).toFixed(0) + 'h' : '–'}</small></button>`;
+  }).join('');
+}
+function pickMonth(off) {
+  const dir = off >= monthOffset ? 1 : -1;
+  monthOffset = off; closePicker(); render(); slideGrid(dir);
+}
+document.addEventListener('click', e => {
+  const el = document.getElementById('month-picker');
+  if (!el || el.hidden) return;
+  if (!el.contains(e.target) && !e.target.closest('#month-label')) closePicker();
+});
+
+/* keyboard: ←/→ months, T today, Esc closes the picker. Never while typing or in a dialog. */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') return closePicker();
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.target.closest('input, textarea, select') || document.querySelector('.modal-overlay.open')) return;
+  if (e.key === 'ArrowLeft') { e.preventDefault(); changeMonth(-1); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); changeMonth(1); }
+  else if (e.key === 't' || e.key === 'T') goToday();
+});
+
+/* swipe the calendar sideways to change month (phone) */
+(() => {
+  let x0 = null, y0 = null;
+  document.addEventListener('touchstart', e => {
+    if (!e.target.closest('#month-grid')) return;
+    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+  }, { passive: true });
+  document.addEventListener('touchend', e => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0;
+    x0 = null;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) changeMonth(dx < 0 ? 1 : -1);
+  }, { passive: true });
+})();
 function jumpToDay(ds) {
   const d = fromDateStr(ds), n = new Date();
   monthOffset = (d.getFullYear() - n.getFullYear()) * 12 + d.getMonth() - n.getMonth();
@@ -1219,6 +1348,7 @@ function render() {
 
   document.getElementById('month-label').textContent =
     view.toLocaleDateString('en', { month: 'long', year: 'numeric' });
+  document.getElementById('today-btn').style.display = monthOffset === 0 ? 'none' : '';
   document.getElementById('who').innerHTML = settings.name
     ? `Swift: <span>${escapeHtml(settings.name)}</span>`
     : 'Swift';
