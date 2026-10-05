@@ -93,7 +93,10 @@
     .hdr-btn.primary { background: var(--accent); color: var(--accent-ink); }
     .hdr-btn.primary:hover { background: var(--accent); filter: brightness(1.08); }
     .month-nav { display: flex; align-items: center; gap: 4px; }
-    .month-label { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; flex: 1; }
+    .month-label { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; }
+    .cal-nav { margin-bottom: 14px; gap: 6px; }
+    .cal-nav .month-label { margin-right: auto; }
+    .cal-card { position: relative; }
     .month-nav button {
       background: var(--surface); border: 1px solid var(--line); color: var(--ink-2);
       width: 40px; height: 40px; border-radius: 999px; cursor: pointer;
@@ -358,7 +361,7 @@
     .month-nav .today-btn { width: auto; padding: 0 14px; font-size: 0.84rem; font-weight: 600; color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
 
     .picker {
-      position: fixed; z-index: 60; top: 108px; left: 12px; right: 12px; max-width: 380px;
+      position: absolute; z-index: 60; top: 52px; left: 0; width: min(380px, 100%);
       background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card);
       box-shadow: 0 16px 40px rgba(10, 16, 13, 0.18); padding: 14px;
       animation: sheet-in 0.18s cubic-bezier(.2,.8,.2,1);
@@ -388,7 +391,6 @@
     .grid.slide-prev { animation: slide-prev 0.22s cubic-bezier(.2,.8,.2,1); }
     @keyframes slide-next { from { opacity: 0.2; transform: translateX(18px); } to { opacity: 1; transform: none; } }
     @keyframes slide-prev { from { opacity: 0.2; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
-    @media (min-width: 1100px) { .picker { top: 72px; left: 32px; right: auto; width: 380px; } }
     @media (hover: none) { .picker-foot span:last-child { display: none; } }
 
     /* Add / edit sheet */
@@ -503,11 +505,9 @@
 
     @media (min-width: 1100px) {
       header { flex-direction: row; align-items: center; gap: 24px; padding: 14px 32px; }
-      header .hdr-top { order: 2; flex: 1; }
-      header .month-nav { order: 1; gap: 8px; }
-      header .month-label { font-size: 1.9rem; order: 3; margin-left: 8px; flex: none; }
-      header .month-nav .today-btn { order: 4; margin-left: 8px; }
-      .who { display: none; }
+      header .hdr-top { flex: 1; }
+      .who { font-size: 1.05rem; color: var(--ink); font-weight: 700; letter-spacing: -0.02em; }
+      .cal-card .month-label { font-size: 1.9rem; }
       .hdr-actions { margin-left: auto; gap: 6px; }
       .hdr-btn { width: auto; padding: 0 12px; gap: 8px; height: 40px; }
       .hdr-btn .ico { width: 18px; height: 18px; }
@@ -561,23 +561,8 @@
       <button class="hdr-btn primary" title="Add shift" aria-label="Add shift" onclick="openAddModal()"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg><span class="lbl">Add shift</span></button>
     </div>
   </div>
-  <div class="month-nav">
-    <button class="month-label" id="month-label" onclick="togglePicker()" aria-haspopup="dialog" aria-expanded="false"></button>
-    <button class="today-btn" id="today-btn" onclick="goToday()" style="display:none">Today</button>
-    <button onclick="changeMonth(-1)" aria-label="Previous month"><svg class="ico" aria-hidden="true"><use href="#i-caret-left"/></svg></button>
-    <button onclick="changeMonth(1)" aria-label="Next month"><svg class="ico" aria-hidden="true"><use href="#i-caret-right"/></svg></button>
-  </div>
 </header>
 
-<div class="picker" id="month-picker" role="dialog" aria-label="Pick a month" hidden>
-  <div class="picker-head">
-    <button onclick="pickerStep(-1)" aria-label="Previous year"><svg class="ico" aria-hidden="true"><use href="#i-caret-left"/></svg></button>
-    <b id="picker-year"></b>
-    <button onclick="pickerStep(1)" aria-label="Next year"><svg class="ico" aria-hidden="true"><use href="#i-caret-right"/></svg></button>
-  </div>
-  <div class="picker-grid" id="picker-grid"></div>
-  <div class="picker-foot"><span><i class="dot" style="background:var(--over)"></i> went over the limit</span><span>←/→ month · T today</span></div>
-</div>
 
 <main class="layout">
   <aside class="rail">
@@ -611,7 +596,21 @@
 
   <section class="center">
     <div class="card cal-card">
-      <h3 class="hrow"><span>Hours by day</span><span class="cal-note">fill = last 7 days against the limit</span></h3>
+      <div class="month-nav cal-nav">
+        <button class="month-label" id="month-label" onclick="togglePicker()" aria-haspopup="dialog" aria-expanded="false"></button>
+        <button class="today-btn" id="today-btn" onclick="goToday()" style="display:none">Today</button>
+        <button onclick="changeMonth(-1)" aria-label="Previous month"><svg class="ico" aria-hidden="true"><use href="#i-caret-left"/></svg></button>
+        <button onclick="changeMonth(1)" aria-label="Next month"><svg class="ico" aria-hidden="true"><use href="#i-caret-right"/></svg></button>
+      </div>
+      <div class="picker" id="month-picker" role="dialog" aria-label="Pick a month" hidden>
+        <div class="picker-head">
+          <button onclick="pickerStep(-1)" aria-label="Previous year"><svg class="ico" aria-hidden="true"><use href="#i-caret-left"/></svg></button>
+          <b id="picker-year"></b>
+          <button onclick="pickerStep(1)" aria-label="Next year"><svg class="ico" aria-hidden="true"><use href="#i-caret-right"/></svg></button>
+        </div>
+        <div class="picker-grid" id="picker-grid"></div>
+        <div class="picker-foot"><span><i class="dot" style="background:var(--over)"></i> went over the limit</span><span>←/→ month · T today</span></div>
+      </div>
       <div class="grid-head"><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div></div>
       <div class="grid" id="month-grid"></div>
       <div class="legend" id="legend"></div>
@@ -683,6 +682,10 @@
       <div class="form-row">
         <div class="form-group"><label for="input-start">Start</label><input type="time" id="input-start"></div>
         <div class="form-group"><label for="input-end">End</label><input type="time" id="input-end"></div>
+      </div>
+      <div class="field len-field">
+        <label>Length <span class="hint" style="display:inline;margin:0">(from the start time)</span></label>
+        <div class="hour-chips" id="len-chips"></div>
       </div>
       <div id="add-track"></div>
       <p class="hint" id="cross-hint" style="display:none">Ends past midnight, so it counts on the start day.</p>
@@ -1873,7 +1876,7 @@ function lastJobId() {
 }
 
 function openAddModal(dateStr) {
-  editingId = null; stripAnchor = null;
+  editingId = null; stripAnchor = null; lengthWanted = null;
   document.getElementById('modal-title').textContent = 'Add shift';
   document.getElementById('delete-btn').style.display = 'none';
   document.getElementById('input-date').value = dateStr || toDateStr(new Date());
@@ -1989,6 +1992,28 @@ function pickPreset(a, b) {
   document.getElementById('input-end').value = b;
   updateBreakHint(); refreshAddForm();
 }
+// "8 hours from 14:00": pick a length and the end time follows from the start.
+function renderLenChips() {
+  const st = document.getElementById('input-start').value, en = document.getElementById('input-end').value;
+  const dur = st && en ? span({ start: st, end: en }).dur : null;
+  document.getElementById('len-chips').innerHTML = [2, 3, 4, 5, 6, 7, 8, 9].map(h =>
+    `<button class="chip${dur === h * 60 ? ' on' : ''}" onclick="pickLength(${h})">${h}h</button>`).join('');
+}
+function pickLength(h) {
+  const st = document.getElementById('input-start');
+  if (!st.value) {
+    lengthWanted = h;
+    document.getElementById('add-check').className = 'add-check';
+    document.getElementById('add-check').textContent = `Set the start time and the end fills in (${h}h later).`;
+    st.focus(); if (st.showPicker) try { st.showPicker(); } catch {}
+    return;
+  }
+  const m = (parseHM(st.value) + h * 60) % (24 * 60);
+  document.getElementById('input-end').value = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  lengthWanted = null;
+  updateBreakHint(); refreshAddForm();
+}
+let lengthWanted = null;   // a length tapped before the start was set
 function renderHourChips() {
   const cur = parseFloat(document.getElementById('input-hours').value);
   document.getElementById('hour-chips').innerHTML = [1, 2, 3, 4, 5, 6, 7, 8].map(h =>
@@ -1996,7 +2021,7 @@ function renderHourChips() {
 }
 // Everything the shift would do, before it is saved: hours, pay, the 7-day count.
 function refreshAddForm() {
-  renderDateStrip(); renderPresets(); renderHourChips();
+  renderDateStrip(); renderPresets(); renderHourChips(); renderLenChips();
   const f = formShift();
   const box = document.getElementById('add-check');
   const saveBtn = document.getElementById('add-save');
@@ -3002,6 +3027,7 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
   document.getElementById(id).addEventListener('input', () => {
     if (id === 'input-date' && document.getElementById(id).value) stripAnchor = mondayOf(document.getElementById(id).value);
     if (id === 'input-break') updateBreakHint();
+    if (id === 'input-start' && lengthWanted && document.getElementById(id).value) return pickLength(lengthWanted);
     refreshAddForm();
   }));
 ['input-start', 'input-end'].forEach(id =>
