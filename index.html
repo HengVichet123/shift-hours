@@ -443,6 +443,13 @@
     .ac-sub { margin-top: 2px; }
     .btn-save:disabled { opacity: 0.4; cursor: not-allowed; }
 
+    #toast {
+      position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translate(-50%, 20px);
+      background: var(--ink); color: var(--surface); padding: 10px 16px; border-radius: 999px; font-size: 0.86rem;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s; z-index: 200; white-space: nowrap;
+    }
+    #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
     /* ---------- layout ----------
        Phone: one column (rail, calendar, side), as before.
        Tablet: summary rail left, calendar right, side under the rail.
@@ -2732,6 +2739,42 @@ function saveSettings() {
   save(); closeModal('settings-modal'); render(); pushSoon();
 }
 
+/* ---------- vichet_data.json: shifts published with the app ----------
+ * New rosters are added to this file and pushed; every device picks them up the next
+ * time the app opens. It only ever ADDS: a shift already here (same id, or the same
+ * day and times) is skipped, and one you deleted on this device stays deleted.
+ */
+async function syncDataFile() {
+  if (storageBroken) return;
+  let file;
+  try {
+    const res = await fetch('vichet_data.json', { cache: 'no-store' });
+    if (!res.ok) return;
+    file = await res.json();
+  } catch { return; }   // offline, or no file: nothing to do
+  const gone = new Set(tombs.map(t => t.id));
+  const jobId = settings.jobs[0].id;
+  let added = 0;
+  (file.shifts || []).forEach(e => {
+    if (!e.id || !e.date || !e.start || !e.end) return;
+    if (gone.has(e.id) || shifts.some(s => s.id === e.id)) return;
+    const s = { id: e.id, date: e.date, start: e.start, end: e.end, jobId,
+                label: '', mins: null, night: false, brk: null };
+    const { same, clash } = conflictsWith(s, null);
+    if (same.length || clash.length) return;
+    shifts.push(stamp(s)); added++;
+  });
+  if (!added) return;
+  save(); render();
+  toast(`Added ${added} shift${added > 1 ? 's' : ''} from your schedule`);
+}
+function toast(msg) {
+  let el = document.getElementById('toast');
+  if (!el) { el = document.createElement('div'); el.id = 'toast'; el.setAttribute('role', 'status'); document.body.appendChild(el); }
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 3500);
+}
+
 /* ---------- data transfer ---------- */
 function exportData() {
   const payload = JSON.stringify({
@@ -3082,6 +3125,8 @@ if ('serviceWorker' in navigator) {
 
 load();
 render();
+syncDataFile();
+document.addEventListener('visibilitychange', () => { if (!document.hidden) syncDataFile(); });
 initCloud();
 
 document.addEventListener('visibilitychange', () => {
