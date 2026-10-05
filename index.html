@@ -318,6 +318,94 @@
     .verdict b { font-weight: 700; }
     .verdict.bad > b { display: block; margin-bottom: 4px; }
 
+
+    /* ---------- layout ----------
+       Phone: one column (rail, calendar, side), as before.
+       Tablet: summary rail left, calendar right, side under the rail.
+       Desktop: rail | calendar | side, rail and side pinned while the calendar scrolls. */
+    .layout { max-width: 560px; }
+    .rail, .center, .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+    .lbl { display: none; }
+    .tms { display: none; }
+    .cal-note { font-size: 0.72rem; font-weight: 400; color: var(--muted); letter-spacing: 0; }
+    .cal-card .cal-note { display: none; }
+
+    /* 12-month bars: thin, rounded at the data end, baseline-anchored */
+    .ychart { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 2px; height: 132px; align-items: end; }
+    .ybar {
+      height: 100%; border: none; background: transparent; padding: 0; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; gap: 4px; position: relative;
+      border-radius: 6px; touch-action: manipulation;
+    }
+    .ybar .yval { font-size: 0.6rem; color: var(--muted); height: 12px; line-height: 12px; }
+    .ybar .ycol { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; border-bottom: 1px solid var(--line); }
+    .ybar .ycol i { display: block; width: 62%; max-width: 18px; min-height: 2px; background: color-mix(in srgb, var(--accent) 38%, var(--surface)); border-radius: 4px 4px 0 0; }
+    .ybar.on .ycol i { background: var(--accent); }
+    .ybar.on .yval, .ybar.on .ylab { color: var(--ink); font-weight: 650; }
+    .ybar .ylab { font-size: 0.62rem; color: var(--muted); }
+    .ybar:hover .ycol i { background: var(--accent); }
+    .ybar[data-tip]:hover::after {
+      content: attr(data-tip); position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+      background: var(--ink); color: var(--bg); font-size: 0.7rem; padding: 5px 8px; border-radius: 8px;
+      white-space: nowrap; pointer-events: none; z-index: 5;
+    }
+    .ybar:first-child[data-tip]:hover::after { left: 0; transform: none; }
+    .ybar:last-child[data-tip]:hover::after { left: auto; right: 0; transform: none; }
+
+    @media (min-width: 760px) {
+      header { padding-left: 24px; padding-right: 24px; }
+      main.layout {
+        max-width: 1100px; padding: 20px 24px 40px;
+        display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start;
+        grid-template-areas: "rail center" "side center";
+      }
+      .rail { grid-area: rail; }
+      .center { grid-area: center; }
+      .side { grid-area: side; }
+      .stats { grid-template-columns: 1fr; }
+      .cal-card .cal-note { display: inline; }
+      .grid, .grid-head { gap: 6px; }
+      .cell { aspect-ratio: auto; min-height: 92px; align-items: flex-start; justify-content: flex-start; padding: 24px 8px 18px; }
+      .cell .dnum { font-size: 0.74rem; top: 6px; left: 8px; }
+      .cell.today .dnum { top: 4px; left: 5px; }
+      .cell .dhrs { font-size: 1.15rem; }
+      .cell .run { font-size: 0.66rem; bottom: 6px; right: 8px; }
+      .cell .dots { position: absolute; bottom: 8px; left: 8px; }
+
+      .modal-overlay { align-items: center; padding: 24px; }
+      .modal { border-radius: 20px; max-width: 520px; max-height: 86dvh; padding-bottom: 20px; }
+      .modal-handle { display: none; }
+      .modal-overlay.open .modal { animation: sheet-in 0.2s cubic-bezier(.2,.8,.2,1); }
+      @keyframes sheet-in { from { transform: translateY(8px) scale(0.98); opacity: 0; } to { transform: none; opacity: 1; } }
+    }
+
+    @media (min-width: 1100px) {
+      header { flex-direction: row; align-items: center; gap: 24px; padding: 14px 32px; }
+      header .hdr-top { order: 2; flex: 1; }
+      header .month-nav { order: 1; gap: 8px; }
+      header .month-label { font-size: 1.9rem; order: 3; margin-left: 8px; }
+      .who { display: none; }
+      .hdr-actions { margin-left: auto; gap: 6px; }
+      .hdr-btn { width: auto; padding: 0 12px; gap: 8px; height: 40px; }
+      .hdr-btn .ico { width: 18px; height: 18px; }
+      .lbl { display: inline; font-size: 0.84rem; font-weight: 550; }
+      .hdr-btn.primary { padding: 0 16px; margin-left: 6px; }
+
+      main.layout {
+        max-width: 1520px; padding: 24px 32px 48px; gap: 20px;
+        grid-template-columns: 290px minmax(0, 1fr) 340px;
+        grid-template-areas: "rail center side";
+      }
+      .rail, .side { position: sticky; top: 92px; max-height: calc(100dvh - 108px); overflow-y: auto; scrollbar-width: thin; }
+      .cal-card { padding: 20px 22px; }
+      .cal-card h3 { font-size: 1.05rem; margin-bottom: 14px; }
+      .cell { min-height: 112px; }
+      .cell .dhrs { font-size: 1.35rem; }
+      .tms { display: flex; flex-direction: column; gap: 1px; margin-top: 3px; width: 100%; }
+      .tms span { font-size: 0.7rem; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .stat-big { font-size: 2.3rem; }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       *, *::before { transition: none !important; animation: none !important; }
     }
@@ -340,12 +428,12 @@
   <div class="hdr-top">
     <div class="who" id="who">Swift</div>
     <div class="hdr-actions">
-      <button class="hdr-btn" title="Read shift photo" aria-label="Read shift photo" onclick="openUploadModal()"><svg class="ico" aria-hidden="true"><use href="#i-camera"/></svg></button>
-      <button class="hdr-btn" title="Paste or type shifts" aria-label="Paste or type shifts" onclick="openPasteModal()"><svg class="ico" aria-hidden="true"><use href="#i-clipboard-text"/></svg></button>
-      <button class="hdr-btn" title="Export to calendar with alarm" aria-label="Export to calendar with alarm" onclick="openIcsModal()"><svg class="ico" aria-hidden="true"><use href="#i-alarm"/></svg></button>
-      <button class="hdr-btn" id="account-btn" title="Account" aria-label="Account" onclick="openAccount()" style="display:none"><svg class="ico" aria-hidden="true"><use href="#i-user"/></svg></button>
-      <button class="hdr-btn" title="Settings" aria-label="Settings" onclick="openSettings()"><svg class="ico" aria-hidden="true"><use href="#i-gear-six"/></svg></button>
-      <button class="hdr-btn primary" title="Add shift" aria-label="Add shift" onclick="openAddModal()"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></button>
+      <button class="hdr-btn" title="Read shift photo" aria-label="Read shift photo" onclick="openUploadModal()"><svg class="ico" aria-hidden="true"><use href="#i-camera"/></svg><span class="lbl">Photo</span></button>
+      <button class="hdr-btn" title="Paste or type shifts" aria-label="Paste or type shifts" onclick="openPasteModal()"><svg class="ico" aria-hidden="true"><use href="#i-clipboard-text"/></svg><span class="lbl">Paste</span></button>
+      <button class="hdr-btn" title="Export to calendar with alarm" aria-label="Export to calendar with alarm" onclick="openIcsModal()"><svg class="ico" aria-hidden="true"><use href="#i-alarm"/></svg><span class="lbl">Alarm</span></button>
+      <button class="hdr-btn" id="account-btn" title="Account" aria-label="Account" onclick="openAccount()" style="display:none"><svg class="ico" aria-hidden="true"><use href="#i-user"/></svg><span class="lbl">Account</span></button>
+      <button class="hdr-btn" title="Settings" aria-label="Settings" onclick="openSettings()"><svg class="ico" aria-hidden="true"><use href="#i-gear-six"/></svg><span class="lbl">Settings</span></button>
+      <button class="hdr-btn primary" title="Add shift" aria-label="Add shift" onclick="openAddModal()"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg><span class="lbl">Add shift</span></button>
     </div>
   </div>
   <div class="month-nav">
@@ -355,49 +443,59 @@
   </div>
 </header>
 
-<main>
-  <div class="stats">
-    <div class="card">
-      <h3 id="today-head">Today</h3>
-      <div id="today-key"></div>
-    </div>
-    <div class="card">
-      <h3 class="hrow">
-        <span>This month</span>
-        <span class="switch" id="money-switch" onclick="toggleMoney()"><i></i></span>
-      </h3>
-      <div class="stat-big" id="stat-pay">¥0</div>
-      <div class="stat-sub" id="stat-hours">0.0h worked</div>
-      <div class="mtog" id="month-seg" style="display:none">
-        <button id="seg-sofar" onclick="setMonthMode('sofar')">so far</button>
-        <button id="seg-end" onclick="setMonthMode('end')">by end</button>
+<main class="layout">
+  <aside class="rail">
+    <div class="stats">
+      <div class="card">
+        <h3 id="today-head">Today</h3>
+        <div id="today-key"></div>
+      </div>
+      <div class="card month-card">
+        <h3 class="hrow">
+          <span>This month</span>
+          <span class="switch" id="money-switch" onclick="toggleMoney()" role="switch" aria-label="Show money"><i></i></span>
+        </h3>
+        <div class="stat-big" id="stat-pay">¥0</div>
+        <div class="stat-sub" id="stat-hours">0.0h worked</div>
+        <div class="mtog" id="month-seg" style="display:none">
+          <button id="seg-sofar" onclick="setMonthMode('sofar')">so far</button>
+          <button id="seg-end" onclick="setMonthMode('end')">by end</button>
+        </div>
       </div>
     </div>
-  </div>
 
-  <div class="alert" id="storage-alert" style="display:none"></div>
-  <div class="alert" id="alert-box" style="display:none"></div>
+    <div class="alert" id="storage-alert" style="display:none"></div>
+    <div class="alert" id="alert-box" style="display:none"></div>
+  </aside>
 
-  <div class="card">
-    <h3>Hours by day</h3>
-    <div class="grid-head"><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div></div>
-    <div class="grid" id="month-grid"></div>
-    <div class="legend" id="legend"></div>
-  </div>
+  <section class="center">
+    <div class="card cal-card">
+      <h3 class="hrow"><span>Hours by day</span><span class="cal-note">fill = last 7 days against the limit</span></h3>
+      <div class="grid-head"><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div></div>
+      <div class="grid" id="month-grid"></div>
+      <div class="legend" id="legend"></div>
+    </div>
+  </section>
 
-  <div class="card">
-    <h3>Upcoming <span id="shift-count"></span></h3>
-    <div id="shift-list"></div>
-  </div>
+  <aside class="side">
+    <div class="card">
+      <h3>Upcoming <span id="shift-count"></span></h3>
+      <div id="shift-list"></div>
+    </div>
 
-  <div class="card">
-    <h3 class="fold" id="pay-head" onclick="togglePay()">
-      <span>Pay breakdown</span>
-      <span class="chev" id="pay-chev">▾</span>
-    </h3>
-    <div id="pay-rows"></div>
-  </div>
+    <div class="card">
+      <h3 class="fold" id="pay-head" onclick="togglePay()">
+        <span>Pay breakdown</span>
+        <span class="chev" id="pay-chev">▾</span>
+      </h3>
+      <div id="pay-rows"></div>
+    </div>
 
+    <div class="card">
+      <h3 class="hrow"><span>Hours per month</span><span class="cal-note" id="year-total"></span></h3>
+      <div class="ychart" id="year-chart"></div>
+    </div>
+  </aside>
 </main>
 
 <!-- Day detail -->
@@ -1118,7 +1216,11 @@ function render() {
       dots = `<div class="dots">${ids.map(id =>
         `<i style="background:${jobById(id).color}"></i>`).join('')}</div>`;
     }
-    c.innerHTML = `<div class="dnum">${day}</div>${hrs}${runTxt}${dots}`;
+    const tms = mins > 0 ? `<div class="tms">${shifts.filter(s => s.date === ds)
+      .sort((a, b) => sortKey(a).localeCompare(sortKey(b)))
+      .map(s => `<span>${isTimed(s) ? `${s.start}–${s.end}` : `${(workedMin(s)/60).toFixed(1)}h`}</span>`)
+      .join('')}</div>` : '';
+    c.innerHTML = `<div class="dnum">${day}</div>${hrs}${tms}${runTxt}${dots}`;
     c.onclick = () => openDay(ds);
     grid.appendChild(c);
   }
@@ -1272,6 +1374,38 @@ function render() {
   }
   applyPayFold();
 
+  /* --- hours per month, the 12 months ending on the viewed one --- */
+  // One series, so no legend: the title names it. Bars jump to their month.
+  const months = Array.from({ length: 12 }, (_, i) => new Date(year, month - 11 + i, 1));
+  const totals = months.map(m => {
+    let mins = 0, pay = 0;
+    shifts.forEach(s => {
+      const d = fromDateStr(s.date);
+      if (d.getFullYear() === m.getFullYear() && d.getMonth() === m.getMonth()) {
+        const p = payOf(s); mins += p.worked; pay += p.pay;
+      }
+    });
+    return { m, mins, pay };
+  });
+  const maxMins = Math.max(60, ...totals.map(x => x.mins));
+  const sumMins = totals.reduce((a, x) => a + x.mins, 0);
+  const sumPay = totals.reduce((a, x) => a + x.pay, 0);
+  document.getElementById('year-total').textContent =
+    `${(sumMins / 60).toFixed(0)}h, ${money(sumPay)}`;
+  const nowM = new Date().getFullYear() * 12 + new Date().getMonth();
+  document.getElementById('year-chart').innerHTML = totals.map((x, i) => {
+    const off = (x.m.getFullYear() * 12 + x.m.getMonth()) - nowM;
+    const h = (x.mins / maxMins * 100).toFixed(1);
+    const label = x.m.toLocaleDateString('en', { month: 'short' });
+    const tip = `${x.m.toLocaleDateString('en', { month: 'long', year: 'numeric' })}: ${(x.mins / 60).toFixed(1)}h, ${money(x.pay)}`;
+    return `<button class="ybar${i === 11 ? ' on' : ''}" onclick="monthOffset=${off};render()"
+        aria-label="${tip}" data-tip="${tip}">
+      <span class="yval">${x.mins ? (x.mins / 60).toFixed(0) : ''}</span>
+      <span class="ycol"><i style="height:${h}%"></i></span>
+      <span class="ylab">${label}</span>
+    </button>`;
+  }).join('');
+
   /* --- upcoming, today onward, across months --- */
   const upcoming = shifts
     .filter(s => s.date >= today)
@@ -1280,7 +1414,7 @@ function render() {
   const list = document.getElementById('shift-list');
   document.getElementById('shift-count').textContent = upcoming.length ? `· ${upcoming.length}` : '';
   if (!upcoming.length) {
-    list.innerHTML = '<div class="empty">No shifts ahead. Tap ＋, 📷 or 📝 to add.</div>';
+    list.innerHTML = '<div class="empty">No shifts ahead. Use Add shift, Photo or Paste at the top.</div>';
   } else {
     list.innerHTML = upcoming.map(s => {
       const d = fromDateStr(s.date);
@@ -1289,7 +1423,7 @@ function render() {
       const job = jobOf(s);
       const timeTxt = isTimed(s)
         ? `${s.start}–${s.end}${parseHM(s.end) <= parseHM(s.start) ? '⁺' : ''}`
-        : '<span style="color:#ccc">no times</span>';
+        : '<span style="color:var(--faint)">no times</span>';
       const tags =
         (nightMinutesOf(s) > 0 ? '<span class="tag night">night</span>' : '') +
         (multiJob() ? `<span class="tag job" style="background:${job.color}">${escapeHtml(job.name)}</span>` : '');
