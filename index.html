@@ -12,6 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&display=swap" rel="stylesheet">
   <link rel="manifest" href="manifest.json">
+  <script>try { var th = localStorage.getItem('sh_theme'); if (th === 'light' || th === 'dark') document.documentElement.dataset.theme = th; } catch (e) {}</script>
   <link rel="apple-touch-icon" href="icon.png">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -31,8 +32,9 @@
       --r-card: 16px; --r-ctl: 10px;
       color-scheme: light;
     }
+    /* Theme: follows the system unless Settings pins light or dark (data-theme on <html>). */
     @media (prefers-color-scheme: dark) {
-      :root {
+      :root:not([data-theme="light"]) {
         --bg: #0E1311; --surface: #161C19; --surface-2: #1D2421;
         --ink: #E6ECE8; --ink-2: #B7C1BC; --muted: #8C9691; --faint: #5E6863; --line: #29322E;
         --accent: #93A5FF; --accent-ink: #0E1311; --accent-soft: #212A4D;
@@ -44,11 +46,22 @@
         color-scheme: dark;
       }
     }
+    :root[data-theme="dark"] {
+        --bg: #0E1311; --surface: #161C19; --surface-2: #1D2421;
+        --ink: #E6ECE8; --ink-2: #B7C1BC; --muted: #8C9691; --faint: #5E6863; --line: #29322E;
+        --accent: #93A5FF; --accent-ink: #0E1311; --accent-soft: #212A4D;
+        --ok: #5CC48A; --ok-soft: #15301F;
+        --warn: #E6A645; --warn-soft: #3A2A10;
+        --over: #F17D70; --over-soft: #3F1C18;
+        --night: #B5A6F2; --night-soft: #2A2443;
+        --shadow: none;
+        color-scheme: dark;
+      }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Geist', system-ui, -apple-system, sans-serif;
-      background: var(--bg); color: var(--ink); min-height: 100dvh;
+      background: var(--surface); color: var(--ink); min-height: 100dvh;
       display: flex; flex-direction: column;
       font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased;
     }
@@ -58,7 +71,7 @@
 
     /* Header: the month is the title of the page */
     header {
-      background: color-mix(in srgb, var(--bg) 88%, transparent);
+      background: color-mix(in srgb, var(--surface) 88%, transparent);
       -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
       padding: 10px 16px 12px;
       padding-top: max(10px, env(safe-area-inset-top));
@@ -89,9 +102,11 @@
     .month-nav button:active { transform: scale(0.94); }
     .month-nav .ico { width: 16px; height: 16px; }
 
-    main { padding: 14px 12px; padding-bottom: calc(28px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 12px; max-width: 560px; width: 100%; margin: 0 auto; }
+    main { padding: 18px 16px; padding-bottom: calc(28px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 24px; max-width: 560px; width: 100%; margin: 0 auto; }
 
-    .card { background: var(--surface); border-radius: var(--r-card); padding: 14px 16px; box-shadow: var(--shadow); border: 1px solid var(--line); }
+    /* Sections sit on the page; a hairline between them, no boxes. */
+    .card { background: transparent; border: none; padding: 0; }
+    .rail > .card + .card, .stats > .card + .card, .side > .card + .card { border-top: 1px solid var(--line); padding-top: 20px; }
     .card h3 { font-size: 0.95rem; font-weight: 650; letter-spacing: -0.01em; color: var(--ink); margin-bottom: 10px; }
     .card h3 .count, #shift-count { color: var(--faint); font-weight: 500; }
     /* .hrow is layout only. .fold also collapses the block after it. Keep them apart, or
@@ -103,7 +118,7 @@
     .card h3.fold + div { margin-top: 10px; }
     .card h3.fold.closed + div { display: none; }
 
-    .stats { display: grid; grid-template-columns: 1fr 1.15fr; gap: 12px; }
+    .stats { display: grid; grid-template-columns: 1fr; gap: 20px; }
     .stat-big { font-size: 2rem; font-weight: 700; letter-spacing: -0.035em; line-height: 1.1; }
     .stat-big.hidden { color: var(--faint); letter-spacing: 0.04em; }
 
@@ -177,16 +192,6 @@
     .cell.today.hol { border: 2px dashed var(--accent); }
     .cell .dots { display: flex; gap: 2px; margin-top: 3px; }
     .cell .dots i { width: 5px; height: 5px; border-radius: 50%; display: block; }
-
-    /* Today, as the key to a day cell: labels name each number */
-    .key { display: flex; align-items: center; gap: 10px; }
-    .key .cell { width: 68px; flex-shrink: 0; }   /* otherwise identical to a grid cell */
-    .key .cell .dnum { font-size: 0.74rem; }
-    .key .cell .dhrs { font-size: 1.2rem; }
-    .key .cell .run { font-size: 0.7rem; }
-    .key .klab { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
-    .key .klab div { font-size: 0.66rem; color: var(--muted); line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .key .klab b { color: var(--ink-2); font-weight: 600; }
 
     /* Time axis */
     .axis { display: flex; justify-content: space-between; font-size: 0.6rem; color: var(--faint); margin-bottom: 3px; }
@@ -319,12 +324,38 @@
     .verdict.bad > b { display: block; margin-bottom: 4px; }
 
 
+    /* Today panel: room left today, the 7-day gauge, today's shifts, add hours */
+    .room { font-size: 2.6rem; font-weight: 700; letter-spacing: -0.045em; line-height: 1; }
+    .room-sub { font-size: 0.8rem; color: var(--muted); margin-top: 6px; max-width: 34ch; line-height: 1.4; }
+    .gauge { height: 8px; background: var(--surface-2); border-radius: 4px; margin-top: 16px; overflow: hidden; }
+    .gauge i { display: block; height: 100%; border-radius: 4px; background: var(--ok); }
+    .gauge i.warn { background: var(--warn); } .gauge i.over { background: var(--over); }
+    .gauge-lab { display: flex; justify-content: space-between; font-size: 0.74rem; color: var(--muted); margin-top: 6px; }
+    .today-shifts { margin-top: 16px; display: flex; flex-direction: column; gap: 6px; }
+    .tshift {
+      display: flex; justify-content: space-between; align-items: center; padding: 11px 14px; min-height: 44px;
+      border-radius: var(--r-ctl); background: var(--accent-soft); border: none; color: var(--ink);
+      cursor: pointer; font-size: 0.9rem; touch-action: manipulation;
+    }
+    .tshift:active { transform: scale(0.98); }
+    .tnone { font-size: 0.86rem; color: var(--muted); }
+    .tadd { margin-top: 16px; }
+    .tadd > span { font-size: 0.8rem; color: var(--ink-2); font-weight: 600; display: block; margin-bottom: 8px; }
+    .tchips { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; }
+    .tchips .chip { padding: 10px 0; font-size: 0.92rem; border-radius: 8px; }
+    .sub-fold { margin-top: 18px !important; padding-top: 14px !important; border-top: 1px solid var(--line); font-size: 0.88rem !important; }
+    .alert-jump {
+      background: none; border: none; color: inherit; font: inherit; text-align: left; cursor: pointer; padding: 2px 0;
+      text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 3px;
+    }
+    .legend-read { flex-basis: 100%; order: 5; }
+
     /* ---------- layout ----------
        Phone: one column (rail, calendar, side), as before.
        Tablet: summary rail left, calendar right, side under the rail.
        Desktop: rail | calendar | side, rail and side pinned while the calendar scrolls. */
     .layout { max-width: 560px; }
-    .rail, .center, .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+    .rail, .center, .side { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
     .lbl { display: none; }
     .tms { display: none; }
     .cal-note { font-size: 0.72rem; font-weight: 400; color: var(--muted); letter-spacing: 0; }
@@ -393,11 +424,13 @@
 
       main.layout {
         max-width: 1520px; padding: 24px 32px 48px; gap: 20px;
-        grid-template-columns: 290px minmax(0, 1fr) 340px;
+        grid-template-columns: 300px minmax(0, 1fr) 330px; gap: 0;
         grid-template-areas: "rail center side";
       }
+      .center { border-left: 1px solid var(--line); border-right: 1px solid var(--line); padding: 0 32px; margin: 0 32px; }
+      .rail { padding-right: 0; }
+      .cal-card { padding: 0; }
       .rail, .side { position: sticky; top: 92px; max-height: calc(100dvh - 108px); overflow-y: auto; scrollbar-width: thin; }
-      .cal-card { padding: 20px 22px; }
       .cal-card h3 { font-size: 1.05rem; margin-bottom: 14px; }
       .cell { min-height: 112px; }
       .cell .dhrs { font-size: 1.35rem; }
@@ -446,7 +479,7 @@
 <main class="layout">
   <aside class="rail">
     <div class="stats">
-      <div class="card">
+      <div class="card today-card">
         <h3 id="today-head">Today</h3>
         <div id="today-key"></div>
       </div>
@@ -461,6 +494,11 @@
           <button id="seg-sofar" onclick="setMonthMode('sofar')">so far</button>
           <button id="seg-end" onclick="setMonthMode('end')">by end</button>
         </div>
+        <h3 class="fold sub-fold" id="pay-head" onclick="togglePay()">
+          <span>Pay breakdown</span>
+          <span class="chev" id="pay-chev">▾</span>
+        </h3>
+        <div id="pay-rows"></div>
       </div>
     </div>
 
@@ -481,14 +519,6 @@
     <div class="card">
       <h3>Upcoming <span id="shift-count"></span></h3>
       <div id="shift-list"></div>
-    </div>
-
-    <div class="card">
-      <h3 class="fold" id="pay-head" onclick="togglePay()">
-        <span>Pay breakdown</span>
-        <span class="chev" id="pay-chev">▾</span>
-      </h3>
-      <div id="pay-rows"></div>
     </div>
 
     <div class="card">
@@ -694,6 +724,15 @@
   <div class="modal">
     <div class="modal-handle"></div>
     <h2>Settings</h2>
+
+    <div class="form-group">
+      <label>Appearance <span class="hint" style="display:inline;margin:0">(this device only)</span></label>
+      <div class="modes" id="theme-modes" style="margin-bottom:0">
+        <button data-th="light" onclick="setTheme('light')">Light</button>
+        <button data-th="dark" onclick="setTheme('dark')">Dark</button>
+        <button data-th="system" onclick="setTheme('system')">Follow system</button>
+      </div>
+    </div>
 
     <div class="form-group">
       <label>Your name</label>
@@ -934,6 +973,8 @@ function toDateStr(d) {
 }
 function fromDateStr(s) { return new Date(s + 'T00:00:00'); }
 function addDays(s, n) { const d = fromDateStr(s); d.setDate(d.getDate() + n); return toDateStr(d); }
+// 18:00 -> 18, 06:30 -> 6:30. Short enough to fit a day cell.
+function hmShort(s) { const [h, m] = s.split(':'); return m === '00' ? String(+h) : `${+h}:${m}`; }
 function parseHM(s) { const [h, m] = s.split(':').map(Number); return h * 60 + m; }
 function yen(n) { return '¥' + Math.round(n).toLocaleString('en-US'); }
 // Masks only the headline figure on the This month card. The Pay breakdown has its own
@@ -1134,6 +1175,11 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 }
 function changeMonth(dir) { monthOffset += dir; render(); }
+function jumpToDay(ds) {
+  const d = fromDateStr(ds), n = new Date();
+  monthOffset = (d.getFullYear() - n.getFullYear()) * 12 + d.getMonth() - n.getMonth();
+  render(); openDay(ds);
+}
 function sortKey(s) { return isTimed(s) ? s.start : '99:99'; }
 
 function toggleMoney() {
@@ -1218,7 +1264,7 @@ function render() {
     }
     const tms = mins > 0 ? `<div class="tms">${shifts.filter(s => s.date === ds)
       .sort((a, b) => sortKey(a).localeCompare(sortKey(b)))
-      .map(s => `<span>${isTimed(s) ? `${s.start}–${s.end}` : `${(workedMin(s)/60).toFixed(1)}h`}</span>`)
+      .map(s => `<span>${isTimed(s) ? `${hmShort(s.start)}–${s.end === '00:00' ? '24' : hmShort(s.end)}` : `${(workedMin(s)/60).toFixed(1)}h`}</span>`)
       .join('')}</div>` : '';
     c.innerHTML = `<div class="dnum">${day}</div>${hrs}${tms}${runTxt}${dots}`;
     c.onclick = () => openDay(ds);
@@ -1232,43 +1278,44 @@ function render() {
     `<span><i class="dot" style="background:var(--ok)"></i>fine</span>
      <span><i class="dot" style="background:var(--warn)"></i>close</span>
      <span><i class="dot" style="background:var(--over)"></i>over</span>
+     <span class="legend-read">big number: hours that day. Small: last 7 days. Fill: how close to the limit</span>
      <span style="margin-left:auto">limit ${caps.map(c => c + 'h').join(' / ')}</span>`;
 
-  /* --- today, used as the key to the grid ---
-   * A worst-case statistic is something you read once. The numbers in a day cell are
-   * something you read every time, so name them using today's real ones.
+  /* --- today: what you can still do, not just what happened ---
+   * The useful number is room: the most you can add today without breaking any 7-day
+   * window that contains today (scheduled shifts later in the week count too).
    */
   const tds = today;
-  const tMins = dm[tds] || 0;
+  const tDate = fromDateStr(tds);
+  const tWins = windowsContaining(tds, dm);
+  const room = Math.min(...tWins.map(w => w.limit * 60 - w.total));
   const tRun = back7(tds, dm);
   const tCap = limitEndingOn(tds);
-  const tCapMin = tCap * 60;
-  const tRunCls = tRun > tCapMin ? 'over' : tRun > tCapMin * 0.9 ? 'warn' : 'ok';
-  const tDate = fromDateStr(tds);
-  const tPeriod = periodOnDay(tds);
+  const tCls = room < 0 ? 'over' : tRun > tCap * 60 * 0.9 ? 'warn' : 'ok';
+  const todays = shifts.filter(s => s.date === tds).sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
 
   document.getElementById('today-head').textContent =
-    tDate.toLocaleDateString('en', { weekday: 'short', month: 'short', day: 'numeric' });
+    'Today, ' + tDate.toLocaleDateString('en', { weekday: 'short', month: 'short', day: 'numeric' });
 
-  // Built with the same classes as a real grid cell, so the key can never drift from it.
-  let kcls = 'cell today';
-  if (tRun > tCapMin) kcls += ' bad';
-  else if (tRun > tCapMin * 0.9) kcls += ' risk';
-  else if (tMins > 0) kcls += ' has';
-  if (periodOnDay(tds)) kcls += ' hol';
-
+  const roomTxt = room >= 0
+    ? `<div class="room ${tCls}">${(room / 60).toFixed(1)}h</div>
+       <div class="room-sub">more you can work today and stay under ${tCap}h in every 7 days</div>`
+    : `<div class="room over">${(-room / 60).toFixed(1)}h over</div>
+       <div class="room-sub">a 7-day stretch that includes today is past the ${tCap}h limit</div>`;
+  const pct = Math.min(100, tRun / (tCap * 60) * 100);
   document.getElementById('today-key').innerHTML = `
-    <div class="key">
-      <div class="${kcls}"${tRun > 0 ? ` style="--fill:${Math.min(tRun / tCapMin, 1).toFixed(3)}"` : ''} onclick="openDay('${tds}')">
-        <div class="dnum">${tDate.getDate()}</div>
-        ${tMins > 0 ? `<div class="dhrs">${(tMins/60).toFixed(1)}</div>` : ''}
-        ${tRun > 0 ? `<div class="run ${tRunCls}">${(tRun/60).toFixed(1)}</div>` : ''}
-      </div>
-      <div class="klab">
-        <div>← date</div>
-        <div>← <b>hours</b> today</div>
-        <div>← <b>last 7 days</b></div>
-      </div>
+    ${roomTxt}
+    <div class="gauge"><i class="${tCls}" style="width:${pct.toFixed(1)}%"></i></div>
+    <div class="gauge-lab"><span>${(tRun / 60).toFixed(1)}h in the last 7 days</span><span>limit ${tCap}h</span></div>
+    <div class="today-shifts">${todays.length
+      ? todays.map(s => `<button class="tshift" onclick="openDay('${tds}')">
+          <span>${isTimed(s) ? `${s.start}–${s.end}` : 'Hours only'}</span>
+          <b>${(workedMin(s) / 60).toFixed(1)}h</b></button>`).join('')
+      : `<div class="tnone">No shift today.</div>`}</div>
+    <div class="tadd">
+      <span>Add hours to today</span>
+      <div class="tchips">${[1, 2, 3, 4, 5, 6, 7, 8].map(h =>
+        `<button class="chip" onclick="quickAdd('${tds}',${h})" aria-label="Add ${h} hours today">${h}</button>`).join('')}</div>
     </div>`;
 
   /* --- storage failure: the loudest thing on the screen, and nothing is written --- */
@@ -1289,8 +1336,8 @@ function render() {
     alertBox.style.display = 'block';
     alertBox.innerHTML = `<b>⚠️ Over the limit in ${bad.length} rolling window${bad.length>1?'s':''}</b><ul>` +
       bad.slice(0, 6).map(w =>
-        `<li>${shortRange(w.start, w.end)} — <b>${(w.total/60).toFixed(1)}h</b> of ${w.limit}h
-          (+${((w.total - w.limit*60)/60).toFixed(1)}h)</li>`
+        `<li><button class="alert-jump" onclick="jumpToDay('${w.end}')">${shortRange(w.start, w.end)}: <b>${(w.total/60).toFixed(1)}h</b> of ${w.limit}h
+          (+${((w.total - w.limit*60)/60).toFixed(1)}h)</button></li>`
       ).join('') +
       (bad.length > 6 ? `<li>…and ${bad.length - 6} more</li>` : '') + '</ul>';
   } else {
@@ -2317,7 +2364,19 @@ function renderSnapshots() {
   }).join('');
 }
 
+function currentTheme() {
+  try { const th = localStorage.getItem('sh_theme'); return th === 'light' || th === 'dark' ? th : 'system'; }
+  catch { return 'system'; }
+}
+// Applied at once, no Save needed: it is a property of this screen, not of the data.
+function setTheme(th) {
+  try { th === 'system' ? localStorage.removeItem('sh_theme') : localStorage.setItem('sh_theme', th); } catch {}
+  if (th === 'system') delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = th;
+  document.querySelectorAll('#theme-modes button').forEach(b => b.classList.toggle('on', b.dataset.th === th));
+}
 function openSettings() {
+  setTheme(currentTheme());
   document.getElementById('set-name').value = settings.name || '';
   document.getElementById('set-limit').value = settings.limit;
   document.getElementById('set-autobreak').checked = !!settings.autoBreak;
