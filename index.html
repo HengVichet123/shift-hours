@@ -866,6 +866,12 @@
     </div>
 
     <div class="form-group">
+      <label class="chk"><input type="checkbox" id="set-sample" onchange="setSample(this.checked)"> Vichet's schedule (sample data)</label>
+      <p class="hint">Adds Vichet's shifts from the file that comes with the app, and keeps them up to date.
+        Turn it off to remove them again. Your own shifts are never touched. This device only.</p>
+    </div>
+
+    <div class="form-group">
       <label>Your name</label>
       <input type="text" id="set-name" placeholder="Vichet" maxlength="24">
     </div>
@@ -2705,6 +2711,7 @@ function setTheme(th) {
 }
 function openSettings() {
   setTheme(currentTheme());
+  document.getElementById('set-sample').checked = sampleOn();
   document.getElementById('set-name').value = settings.name || '';
   document.getElementById('set-limit').value = settings.limit;
   document.getElementById('set-autobreak').checked = !!settings.autoBreak;
@@ -2739,13 +2746,27 @@ function saveSettings() {
   save(); closeModal('settings-modal'); render(); pushSoon();
 }
 
-/* ---------- vichet_data.json: shifts published with the app ----------
- * New rosters are added to this file and pushed; every device picks them up the next
- * time the app opens. It only ever ADDS: a shift already here (same id, or the same
+/* ---------- vichet_data.json: Vichet's shifts, shipped as sample data ----------
+ * Only used where the sample switch in Settings is on. New rosters are added to this
+ * file and pushed; those devices pick them up the next time the app opens. It only ever ADDS: a shift already here (same id, or the same
  * day and times) is skipped, and one you deleted on this device stays deleted.
  */
+function sampleOn() { try { return localStorage.getItem('sh_sample') === '1'; } catch { return false; } }
+// Off by default, so someone else opening the app never gets Vichet's shifts.
+function setSample(on) {
+  try { on ? localStorage.setItem('sh_sample', '1') : localStorage.removeItem('sh_sample'); } catch {}
+  if (on) { syncDataFile(); return; }
+  // Sample shifts carry ids starting with "v-". Removed without tombstones: they were
+  // never yours, and turning the sample back on should bring them all back.
+  const before = shifts.length;
+  shifts = shifts.filter(s => !String(s.id).startsWith('v-'));
+  tombs = tombs.filter(t => !String(t.id).startsWith('v-'));
+  const removed = before - shifts.length;
+  save(); render();
+  toast(removed ? `Removed ${removed} sample shift${removed > 1 ? 's' : ''}` : 'Sample is off');
+}
 async function syncDataFile() {
-  if (storageBroken) return;
+  if (storageBroken || !sampleOn()) return;
   let file;
   try {
     const res = await fetch('vichet_data.json', { cache: 'no-store' });
@@ -3081,7 +3102,7 @@ document.getElementById('ics-second').addEventListener('change', e => {
 });
 
 /* ---------- keeping the installed app up to date ---------- */
-const APP_VERSION = 'v26';
+const APP_VERSION = 'v27';
 
 // Nuke the cached copy of the app and reload from the network. The shifts live in
 // localStorage, which none of this touches.
