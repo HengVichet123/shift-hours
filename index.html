@@ -351,7 +351,7 @@
     .legend-read { flex-basis: 100%; order: 5; }
 
     /* Month title is a button: it opens the picker */
-    .month-label { background: none; border: none; text-align: left; cursor: pointer; padding: 0; color: var(--ink); font-family: inherit; white-space: nowrap; }
+    .month-nav .month-label { width: auto; height: auto; border-radius: 6px; display: block; background: none; border: none; text-align: left; cursor: pointer; padding: 0; color: var(--ink); font-family: inherit; white-space: nowrap; }
     .month-label::after { content: ''; display: inline-block; width: 8px; height: 8px; margin-left: 10px; vertical-align: 0.22em;
       border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); }
     .month-label[aria-expanded="true"]::after { transform: rotate(-135deg); vertical-align: 0; }
@@ -390,6 +390,56 @@
     @keyframes slide-prev { from { opacity: 0.2; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
     @media (min-width: 1100px) { .picker { top: 72px; left: 32px; right: auto; width: 380px; } }
     @media (hover: none) { .picker-foot span:last-child { display: none; } }
+
+    /* Add / edit sheet */
+    .add-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
+    .add-top h2 { margin: 0; }
+    .btn-danger.small { min-height: 36px; padding: 6px 14px; font-size: 0.8rem; display: inline-flex; align-items: center; }
+    .field { margin-bottom: 14px; }
+    .field-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    .field-head label { margin: 0; }
+    .week-nav { display: flex; align-items: center; gap: 4px; }
+    .week-nav button { width: 32px; height: 32px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .week-nav .ico { width: 13px; height: 13px; }
+    .week-nav input[type=date] { width: auto; padding: 5px 8px; font-size: 0.8rem; border-radius: 999px; }
+    .date-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+    .ds {
+      border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 7px 0 6px;
+      display: flex; flex-direction: column; align-items: center; gap: 1px; cursor: pointer; touch-action: manipulation; min-height: 58px;
+    }
+    .ds small { font-size: 0.64rem; color: var(--muted); }
+    .ds b { font-size: 1.05rem; }
+    .ds i { font-style: normal; font-size: 0.6rem; color: var(--muted); min-height: 0.8em; }
+    .ds.now b { color: var(--accent); }
+    .ds.on { background: var(--accent); border-color: var(--accent); }
+    .ds.on small, .ds.on b, .ds.on i { color: var(--accent-ink); }
+    .ds:active, .pchip:active, .hour-chips .chip:active { transform: scale(0.96); }
+    .preset-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pchip {
+      border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 8px 14px;
+      font-size: 0.88rem; font-weight: 600; cursor: pointer; touch-action: manipulation; min-height: 40px;
+    }
+    .pchip.on { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+    .hour-chips { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; margin-bottom: 8px; }
+    .hour-chips .chip { padding: 10px 0; font-size: 0.95rem; }
+    .hour-chips .chip.on { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+    #add-track { margin: -2px 0 8px; }
+    #add-track .track { height: 18px; }
+    details.brk { margin-top: 4px; }
+    details.brk summary { font-size: 0.8rem; color: var(--muted); cursor: pointer; list-style: none; }
+    details.brk summary::-webkit-details-marker { display: none; }
+    details.brk summary::after { content: '  change'; color: var(--accent); font-weight: 600; }
+    details.brk[open] summary::after { content: ''; }
+    .add-check { margin-top: 14px; border-radius: 12px; padding: 12px 14px; font-size: 0.84rem; line-height: 1.45; background: var(--surface-2); color: var(--muted); }
+    .add-check.good { background: var(--ok-soft); color: var(--ink-2); }
+    .add-check.warn { background: var(--warn-soft); color: var(--ink-2); }
+    .add-check.bad { background: var(--over-soft); color: var(--over); }
+    .ac-main { display: flex; align-items: baseline; justify-content: space-between; }
+    .ac-main b { font-size: 1.4rem; letter-spacing: -0.02em; color: var(--ink); }
+    .ac-main span { font-weight: 650; color: var(--ink); }
+    .add-check.bad .ac-main b, .add-check.bad .ac-main span { color: var(--over); }
+    .ac-sub { margin-top: 2px; }
+    .btn-save:disabled { opacity: 0.4; cursor: not-allowed; }
 
     /* ---------- layout ----------
        Phone: one column (rail, calendar, side), as before.
@@ -596,54 +646,72 @@
 
 <!-- Add/Edit Shift -->
 <div class="modal-overlay" id="add-modal">
-  <div class="modal">
+  <div class="modal add-sheet">
     <div class="modal-handle"></div>
-    <h2 id="modal-title">Add Shift</h2>
-
-    <div class="modes">
-      <button id="mode-times" onclick="setMode('times')">Start &amp; end</button>
-      <button id="mode-hours" onclick="setMode('hours')">Just hours</button>
+    <div class="add-top">
+      <h2 id="modal-title">Add shift</h2>
+      <button class="btn-danger small" id="delete-btn" style="display:none" onclick="deleteCurrentShift()">Delete</button>
     </div>
 
-    <div class="form-group"><label>Date</label><input type="date" id="input-date"></div>
+    <div class="field">
+      <div class="field-head">
+        <label for="input-date">Day</label>
+        <div class="week-nav">
+          <button onclick="shiftWeek(-7)" aria-label="Previous week"><svg class="ico" aria-hidden="true"><use href="#i-caret-left"/></svg></button>
+          <button onclick="shiftWeek(7)" aria-label="Next week"><svg class="ico" aria-hidden="true"><use href="#i-caret-right"/></svg></button>
+          <input type="date" id="input-date" aria-label="Date">
+        </div>
+      </div>
+      <div class="date-strip" id="date-strip"></div>
+    </div>
 
-    <div class="form-group" id="job-group">
-      <label>Job</label>
+    <div class="field" id="job-group">
+      <label for="input-job">Job</label>
       <select id="input-job"></select>
     </div>
 
+    <div class="modes">
+      <button id="mode-times" onclick="setMode('times')">Start and end</button>
+      <button id="mode-hours" onclick="setMode('hours')">Just hours</button>
+    </div>
+
     <div id="times-fields">
+      <div class="field">
+        <label>Your usual shifts</label>
+        <div class="preset-chips" id="preset-chips"></div>
+      </div>
       <div class="form-row">
-        <div class="form-group"><label>Start</label><input type="time" id="input-start"></div>
-        <div class="form-group"><label>End</label><input type="time" id="input-end"></div>
+        <div class="form-group"><label for="input-start">Start</label><input type="time" id="input-start"></div>
+        <div class="form-group"><label for="input-end">End</label><input type="time" id="input-end"></div>
       </div>
-      <p class="hint" id="cross-hint" style="display:none">Ends past midnight — counted as the same working day.</p>
-      <div class="form-group">
-        <label>Break (min)</label>
-        <input type="number" id="input-break" min="0" step="5" placeholder="auto">
-        <p class="hint" id="break-hint"></p>
-      </div>
+      <div id="add-track"></div>
+      <p class="hint" id="cross-hint" style="display:none">Ends past midnight, so it counts on the start day.</p>
+      <details class="brk">
+        <summary id="break-hint">Break: automatic</summary>
+        <div class="form-group" style="margin-top:8px">
+          <label for="input-break">Break in minutes (leave empty for automatic)</label>
+          <input type="number" id="input-break" min="0" step="5" placeholder="automatic">
+        </div>
+      </details>
     </div>
 
     <div id="hours-fields" style="display:none">
-      <div class="form-group">
-        <label>Hours worked</label>
-        <input type="number" id="input-hours" min="0" step="0.5" placeholder="3">
-        <p class="hint">Taken as hours you actually worked — no break is deducted.</p>
+      <div class="field">
+        <label for="input-hours">Hours worked</label>
+        <div class="hour-chips" id="hour-chips"></div>
+        <input type="number" id="input-hours" min="0" step="0.5" placeholder="Or type, e.g. 4.5">
       </div>
-      <div class="form-group">
-        <label class="chk"><input type="checkbox" id="input-night"> Paid at the night rate</label>
-        <p class="hint">Without start and end times the app can't tell which hours were late,
-          so it uses this job's regular rate unless you tick this.</p>
-      </div>
+      <label class="chk"><input type="checkbox" id="input-night"> Paid at the night rate</label>
+      <p class="hint">No times means no break is deducted, and the regular rate is used unless you tick this.</p>
     </div>
 
-    <div class="form-group"><label>Note (optional)</label><input type="text" id="input-label" placeholder=""></div>
+    <div class="form-group" style="margin-top:12px"><label for="input-label">Note (optional)</label><input type="text" id="input-label"></div>
+
+    <div class="add-check" id="add-check"></div>
 
     <div class="modal-actions">
-      <button class="btn-danger" id="delete-btn" style="display:none" onclick="deleteCurrentShift()">Delete</button>
       <button class="btn-outline" onclick="closeModal('add-modal')">Cancel</button>
-      <button class="btn-save" onclick="saveShift()">Save</button>
+      <button class="btn-save" id="add-save" onclick="saveShift()">Save shift</button>
     </div>
   </div>
 </div>
@@ -1784,17 +1852,20 @@ function setMode(m) {
   document.getElementById('mode-hours').classList.toggle('on', m === 'hours');
   document.getElementById('times-fields').style.display = m === 'times' ? 'block' : 'none';
   document.getElementById('hours-fields').style.display = m === 'hours' ? 'block' : 'none';
+  if (document.getElementById('add-modal').classList.contains('open')) refreshAddForm();
 }
 function updateBreakHint() {
   const st = document.getElementById('input-start').value;
   const en = document.getElementById('input-end').value;
   const hint = document.getElementById('break-hint');
   const cross = document.getElementById('cross-hint');
-  if (!st || !en) { hint.textContent = ''; cross.style.display = 'none'; return; }
+  if (!st || !en) { hint.textContent = 'Break: automatic'; cross.style.display = 'none'; return; }
   const { dur } = span({ start: st, end: en });
   cross.style.display = parseHM(en) <= parseHM(st) ? 'block' : 'none';
   const auto = settings.autoBreak ? autoBreakFor(dur) : 0;
-  hint.textContent = `${(dur/60).toFixed(1)}h shift → auto ${auto} min`;
+  const manual = document.getElementById('input-break').value.trim();
+  hint.textContent = manual !== '' ? `Break: ${+manual} min (set by you)`
+    : `Break: ${auto} min, automatic for a ${(dur/60).toFixed(1)}h shift`;
 }
 function lastJobId() {
   const s = [...shifts].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
@@ -1802,8 +1873,8 @@ function lastJobId() {
 }
 
 function openAddModal(dateStr) {
-  editingId = null;
-  document.getElementById('modal-title').textContent = 'Add Shift';
+  editingId = null; stripAnchor = null;
+  document.getElementById('modal-title').textContent = 'Add shift';
   document.getElementById('delete-btn').style.display = 'none';
   document.getElementById('input-date').value = dateStr || toDateStr(new Date());
   document.getElementById('input-start').value = '';
@@ -1816,13 +1887,14 @@ function openAddModal(dateStr) {
   fillJobSelect('input-job', lastJobId());
   setMode(addMode);
   updateBreakHint();
+  refreshAddForm();
   document.getElementById('add-modal').classList.add('open');
 }
 function editShift(id) {
   const s = shifts.find(x => x.id === id); if (!s) return;
-  editingId = id;
-  document.getElementById('modal-title').textContent = 'Edit Shift';
-  document.getElementById('delete-btn').style.display = 'block';
+  editingId = id; stripAnchor = null;
+  document.getElementById('modal-title').textContent = 'Edit shift';
+  document.getElementById('delete-btn').style.display = 'inline-flex';
   document.getElementById('input-date').value = s.date;
   document.getElementById('input-start').value = s.start || '';
   document.getElementById('input-end').value = s.end || '';
@@ -1834,6 +1906,7 @@ function editShift(id) {
   fillJobSelect('input-job', s.jobId);
   setMode(isTimed(s) ? 'times' : 'hours');
   updateBreakHint();
+  refreshAddForm();
   document.getElementById('add-modal').classList.add('open');
 }
 
@@ -1858,6 +1931,100 @@ function blockedReason(data, exceptId) {
     return `That would make ${data.date} add up to ${(dayTotal/60).toFixed(1)} hours.\n\nThere are only 24 in a day.`;
   }
   return null;
+}
+
+/* --- the add/edit form: pick, see the result, then save --- */
+// What the form currently describes, or why it is not a shift yet.
+function formShift() {
+  const date = document.getElementById('input-date').value;
+  if (!date) return { missing: 'Pick a day.' };
+  const jobId = document.getElementById('input-job').value || settings.jobs[0].id;
+  const label = document.getElementById('input-label').value.trim();
+  if (addMode === 'hours') {
+    const h = parseFloat(document.getElementById('input-hours').value);
+    if (!(h > 0)) return { missing: 'Choose how many hours.' };
+    if (h > 24) return { error: 'That is more than a day.' };
+    return { data: { date, jobId, label, mins: Math.round(h * 60),
+      night: document.getElementById('input-night').checked, start: null, end: null, brk: null } };
+  }
+  const start = document.getElementById('input-start').value;
+  const end = document.getElementById('input-end').value;
+  if (!start || !end) return { missing: 'Pick one of your usual shifts, or set a start and end.' };
+  if (start === end) return { error: 'Start and end are the same.' };
+  const brkRaw = document.getElementById('input-break').value.trim();
+  return { data: { date, jobId, label, start, end,
+    brk: brkRaw === '' ? null : Math.max(0, +brkRaw), mins: null, night: false } };
+}
+
+let stripAnchor = null;   // Monday of the week shown in the date strip
+function mondayOf(ds) { const d = fromDateStr(ds); return addDays(ds, -((d.getDay() + 6) % 7)); }
+function shiftWeek(n) { stripAnchor = addDays(stripAnchor, n); renderDateStrip(); }
+function pickDate(ds) { document.getElementById('input-date').value = ds; refreshAddForm(); }
+function renderDateStrip() {
+  const sel = document.getElementById('input-date').value || toDateStr(new Date());
+  if (!stripAnchor) stripAnchor = mondayOf(sel);
+  const dm = dayMapOf(shifts.filter(s => s.id !== editingId));
+  const today = toDateStr(new Date());
+  document.getElementById('date-strip').innerHTML = Array.from({ length: 7 }, (_, i) => {
+    const ds = addDays(stripAnchor, i), d = fromDateStr(ds);
+    const h = dm[ds] ? (dm[ds] / 60).toFixed(1) + 'h' : '';
+    return `<button class="ds${ds === sel ? ' on' : ''}${ds === today ? ' now' : ''}" onclick="pickDate('${ds}')">
+      <small>${d.toLocaleDateString('en', { weekday: 'short' })}</small><b>${d.getDate()}</b><i>${h}</i></button>`;
+  }).join('');
+}
+// The shifts you actually work, most frequent first: one tap fills start and end.
+function renderPresets() {
+  const count = {};
+  shifts.filter(isTimed).forEach(s => { const k = s.start + '|' + s.end; count[k] = (count[k] || 0) + 1; });
+  const top = Object.entries(count).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k]) => k.split('|'))
+    .sort((a, b) => a[0].localeCompare(b[0]));
+  const st = document.getElementById('input-start').value, en = document.getElementById('input-end').value;
+  document.getElementById('preset-chips').innerHTML = top.length
+    ? top.map(([a, b]) => `<button class="pchip${a === st && b === en ? ' on' : ''}" onclick="pickPreset('${a}','${b}')">
+        ${hmShort(a)}–${b === '00:00' ? '24' : hmShort(b)}</button>`).join('')
+    : '<span class="hint">Your common shifts will show here once you have a few.</span>';
+}
+function pickPreset(a, b) {
+  document.getElementById('input-start').value = a;
+  document.getElementById('input-end').value = b;
+  updateBreakHint(); refreshAddForm();
+}
+function renderHourChips() {
+  const cur = parseFloat(document.getElementById('input-hours').value);
+  document.getElementById('hour-chips').innerHTML = [1, 2, 3, 4, 5, 6, 7, 8].map(h =>
+    `<button class="chip${cur === h ? ' on' : ''}" onclick="document.getElementById('input-hours').value=${h};refreshAddForm()">${h}</button>`).join('');
+}
+// Everything the shift would do, before it is saved: hours, pay, the 7-day count.
+function refreshAddForm() {
+  renderDateStrip(); renderPresets(); renderHourChips();
+  const f = formShift();
+  const box = document.getElementById('add-check');
+  const saveBtn = document.getElementById('add-save');
+  const track = document.getElementById('add-track');
+  track.innerHTML = f.data && isTimed(f.data) ? trackHtml(f.data) : '';
+  if (!f.data) {
+    box.className = 'add-check' + (f.error ? ' bad' : '');
+    box.innerHTML = f.error || f.missing;
+    saveBtn.disabled = true; return;
+  }
+  const why = blockedReason(f.data, editingId);
+  if (why) {
+    box.className = 'add-check bad';
+    box.innerHTML = escapeHtml(why).replace(/\n\n/g, '<br>');
+    saveBtn.disabled = true; return;
+  }
+  const p = payOf(f.data);
+  const dm = dayMapOf([...shifts.filter(s => s.id !== editingId), f.data]);
+  const wins = windowsContaining(f.data.date, dm);
+  const worst = wins.reduce((a, b) => (b.total - b.limit * 60) > (a.total - a.limit * 60) ? b : a);
+  const over = worst.total > worst.limit * 60;
+  const close = !over && worst.total > worst.limit * 60 * 0.9;
+  box.className = 'add-check ' + (over ? 'bad' : close ? 'warn' : 'good');
+  box.innerHTML = `<div class="ac-main"><b>${(p.worked / 60).toFixed(1)}h</b><span>${money(p.pay)}</span></div>
+    <div class="ac-sub">${over
+      ? `Over the limit: ${(worst.total / 60).toFixed(1)}h in ${shortRange(worst.start, worst.end)}, the limit is ${worst.limit}h.`
+      : `Busiest 7 days with this shift: ${(worst.total / 60).toFixed(1)}h of ${worst.limit}h (${shortRange(worst.start, worst.end)}).`}</div>`;
+  saveBtn.disabled = false;
 }
 
 /* --- quick add: tap a day, tap a number, done --- */
@@ -1943,7 +2110,6 @@ function saveShift() {
     shifts.push(stamp({ ...data, id: newId() }));
   }
   save(); closeModal('add-modal'); render(); pushSoon();
-  warnIfOver(date);
 }
 
 function warnIfOver(date) {
@@ -2832,6 +2998,12 @@ async function initCloud() {
 document.querySelectorAll('.modal-overlay').forEach(el => {
   el.addEventListener('click', e => { if (e.target === el) closeModal(el.id); });
 });
+['input-date', 'input-start', 'input-end', 'input-hours', 'input-night', 'input-break', 'input-job', 'input-label'].forEach(id =>
+  document.getElementById(id).addEventListener('input', () => {
+    if (id === 'input-date' && document.getElementById(id).value) stripAnchor = mondayOf(document.getElementById(id).value);
+    if (id === 'input-break') updateBreakHint();
+    refreshAddForm();
+  }));
 ['input-start', 'input-end'].forEach(id =>
   document.getElementById(id).addEventListener('change', updateBreakHint));
 document.getElementById('ics-scope').addEventListener('change', updateIcsCount);
